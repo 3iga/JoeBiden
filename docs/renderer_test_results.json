@@ -1,0 +1,66 @@
+[
+  {
+    "test": "baseline",
+    "exit_code": 0,
+    "summary": "Rendered 4 frames in 0.214254 s; average 18.6695 FPS. Seed 1337, 77 corals, 178 scene draws, 361761 mesh triangles."
+  },
+  {
+    "test": "no_caustics",
+    "exit_code": 0,
+    "summary": "Rendered 4 frames in 0.18404 s; average 21.7344 FPS. Seed 1337, 77 corals, 178 scene draws, 361761 mesh triangles.",
+    "mean_absolute_pixel_change": 1.852
+  },
+  {
+    "test": "no_normals",
+    "exit_code": 0,
+    "summary": "Rendered 4 frames in 0.195785 s; average 20.4306 FPS. Seed 1337, 77 corals, 178 scene draws, 361761 mesh triangles.",
+    "mean_absolute_pixel_change": 3.037
+  },
+  {
+    "test": "no_textures",
+    "exit_code": 0,
+    "summary": "Rendered 4 frames in 0.217139 s; average 18.4213 FPS. Seed 1337, 77 corals, 178 scene draws, 361761 mesh triangles.",
+    "mean_absolute_pixel_change": 17.846
+  },
+  {
+    "test": "unlit",
+    "exit_code": 0,
+    "summary": "Rendered 4 frames in 0.196685 s; average 20.337 FPS. Seed 1337, 77 corals, 178 scene draws, 361761 mesh triangles.",
+    "mean_absolute_pixel_change": 8.743
+  },
+  {
+    "test": "no_fog",
+    "exit_code": 0,
+    "summary": "Rendered 4 frames in 0.200197 s; average 19.9803 FPS. Seed 1337, 77 corals, 178 scene draws, 361761 mesh triangles.",
+    "mean_absolute_pixel_change": 27.477
+  },
+  {
+    "test": "wireframe",
+    "exit_code": 0,
+    "summary": "Rendered 4 frames in 0.768125 s; average 5.20749 FPS. Seed 1337, 77 corals, 178 scene draws, 361761 mesh triangles.",
+    "mean_absolute_pixel_change": 27.853
+  },
+  {
+    "test": "low",
+    "exit_code": 0,
+    "summary": "Rendered 4 frames in 0.151356 s; average 26.4278 FPS. Seed 1337, 41 corals, 108 scene draws, 204153 mesh triangles.",
+    "mean_absolute_pixel_change": 7.389
+  },
+  {
+    "test": "high",
+    "exit_code": 0,
+    "summary": "Rendered 4 frames in 0.282834 s; average 14.1426 FPS. Seed 1337, 129 corals, 178 scene draws, 631314 mesh triangles.",
+    "mean_absolute_pixel_change": 10.422
+  },
+  {
+    "test": "new_seed",
+    "exit_code": 0,
+    "summary": "Rendered 4 frames in 0.223197 s; average 17.9214 FPS. Seed 1338, 77 corals, 178 scene draws, 391860 mesh triangles.",
+    "mean_absolute_pixel_change": 11.629
+  },
+  {
+    "test": "hotkey_logic_injection",
+    "exit_code": 0,
+    "summary": "Rendered 12 frames in 1.17491 s; average 10.2135 FPS. Seed 1338, 129 corals, 178 scene draws, 655814 mesh triangles."
+  }
+]

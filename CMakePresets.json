@@ -1,0 +1,22 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {"major": 3, "minor": 21, "patch": 0},
+  "configurePresets": [
+    {
+      "name": "windows-release",
+      "displayName": "Windows x64 Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows"},
+      "architecture": {"value": "x64", "strategy": "external"},
+      "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}
+    },
+    {
+      "name": "windows-debug",
+      "inherits": "windows-release",
+      "displayName": "Windows x64 Debug",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug"}
+    }
+  ]
+}
