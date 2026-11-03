@@ -1,8 +1,37 @@
 #include "Scene.hpp"
 #include "Geometry.hpp"
 #include <array>
+#include <limits>
 
 namespace reef {
+namespace {
+struct FishSpecies { const char* name;const char* trait;float lengthCm,weightKg; };
+constexpr std::array<FishSpecies,4> fishSpecies={{
+    {"CLOWNFISH","NESTS AMONG ANEMONES",20.0f,.25f},
+    {"BLUE TANG","GRAZES FAST-GROWING ALGAE",34.0f,1.1f},
+    {"BUTTERFLYFISH","HUNTS TINY REEF POLYPS",18.0f,.30f},
+    {"GIANT PARROTFISH","MAKES SAND FROM CORAL",70.0f,3.9f}
+}};
+FishInfo describeFish(int i,float time) {
+    FishInfo info;info.index=i;info.species=i%int(fishSpecies.size());
+    const FishSpecies& species=fishSpecies[std::size_t(info.species)];
+    info.name=species.name;info.trait=species.trait;
+    info.scale=.75f+float(i%4)*.09f;
+    float relativeScale=info.scale/.84f;
+    info.lengthCm=int(std::lround(species.lengthCm*relativeScale));
+    info.weightKg=species.weightKg*relativeScale*relativeScale*relativeScale;
+    info.color=info.species==0?Vec4{1.0f,.43f,.18f,1}:
+               info.species==1?Vec4{.20f,.72f,.98f,1}:
+               info.species==2?Vec4{1.0f,.78f,.20f,1}:Vec4{.32f,.84f,.59f,1};
+    bool group=(i%2)==0;float phase=float(i)*.61f,timeScale=group?.30f:-.24f;
+    float a=time*timeScale+phase,rx=group?6.5f:4.8f,rz=group?4.0f:3.3f;
+    Vec3 center=group?Vec3(-3.0f,2.4f,-8.0f):Vec3(4.2f,3.5f,-9.5f);
+    info.position=center+Vec3(std::cos(a)*rx,.45f*std::sin(a*1.7f+phase),std::sin(a)*rz);
+    Vec3 velocity(-std::sin(a)*rx*timeScale,0,std::cos(a)*rz*timeScale);
+    info.yaw=std::atan2(-velocity.z,velocity.x);
+    return info;
+}
+}
 Scene::Scene(const std::filesystem::path& p)
     :shader(p/"reef.vert",p/"reef.frag"),background(p/"background.vert",p/"background.frag"),
      bubbleShader(p/"bubbles.vert",p/"bubbles.frag"),sand(makeSeabed()),branch(makeBranchCoral()),
@@ -29,6 +58,34 @@ Scene::Scene(const std::filesystem::path& p)
     fish.children={body,pivot,dorsal,bottom,side,eye,eye2};
 }
 Scene::~Scene() { glDeleteBuffers(1,&bubbleVBO);glDeleteVertexArrays(1,&bubbleVAO);glDeleteVertexArrays(1,&emptyVAO); }
+FishInfo Scene::fishInfo(int index,float time) const {
+    if(index<0||index>=fishCount)return {};
+    return describeFish(index,time);
+}
+int Scene::pickFish(const Camera& camera,float mouseX,float mouseY,int width,int height,float time) const {
+    if(width<=0||height<=0)return -1;
+    const float focal=float(height)/(2.0f*std::tan(camera.fov*.5f));
+    const Vec3 forward=camera.forward(),right=camera.right(),up=camera.up();
+    int picked=-1;float bestScore=std::numeric_limits<float>::max(),bestDepth=std::numeric_limits<float>::max();
+    for(int i=0;i<fishCount;++i) {
+        FishInfo fish=describeFish(i,time);Vec3 delta=fish.position-camera.position;
+        float depth=dot(delta,forward);if(depth<=.1f)continue;
+        float screenX=float(width)*.5f+dot(delta,right)*focal/depth;
+        float screenY=float(height)*.5f-dot(delta,up)*focal/depth;
+        float radius=focal*(.72f*fish.scale)/depth+8.0f;
+        float dx=mouseX-screenX,dy=mouseY-screenY,score=(dx*dx+dy*dy)/(radius*radius);
+        if(score<=1.0f&&(score<bestScore||(std::abs(score-bestScore)<.04f&&depth<bestDepth))) {
+            picked=i;bestScore=score;bestDepth=depth;
+        }
+    }
+    return picked;
+}
+void Scene::discoverFish(int index) {
+    if(index>=0&&index<fishCount)discoveredFish[std::size_t(index%int(discoveredFish.size()))]=true;
+}
+int Scene::discoveredSpeciesCount() const {
+    int count=0;for(bool discovered:discoveredFish)if(discovered)++count;return count;
+}
 void Scene::regenerate(const Settings& settings) {
     const int targets[3]={40,76,128};const float spacing[3]={2.7f,2.2f,1.75f};
     auto points=scatter(settings.seed,targets[settings.quality],spacing[settings.quality]);
@@ -60,22 +117,24 @@ void Scene::material(const Material& m) {
     m.diffuse.bind(0);m.normal.bind(1);
     shader.set("uUVScale",m.uvScale);shader.set("uShininess",m.shininess);shader.set("uSpecular",m.specular);
 }
-void Scene::draw(Mesh& mesh,Material& m,const Mat4& model,Vec4 tint,float sway,float emission) {
+void Scene::draw(Mesh& mesh,Material& m,const Mat4& model,Vec4 tint,float sway,float emission,int fishPattern) {
     material(m);shader.set("uInstanced",0);shader.set("uModel",model);shader.set("uTint",tint);
-    shader.set("uSway",sway);shader.set("uEmission",emission);mesh.draw();++drawCalls;triangleCount+=mesh.triangles();
+    shader.set("uSway",sway);shader.set("uEmission",emission);shader.set("uFishPattern",fishPattern);
+    mesh.draw();++drawCalls;triangleCount+=mesh.triangles();
 }
 void Scene::drawInstances(Mesh& mesh,Material& m,float sway) {
     if(mesh.instances()==0)return;
     material(m);shader.set("uInstanced",1);shader.set("uSway",sway);shader.set("uEmission",0.0f);
     mesh.drawInstances();++drawCalls;triangleCount+=mesh.triangles()*mesh.instances();
 }
-void Scene::drawNode(const Node& node,const Mat4& parent) {
+void Scene::drawNode(const Node& node,const Mat4& parent,int fishPattern,float emission) {
     // Hierarchical modeling: world = parentWorld * local.
     Mat4 world=parent*node.local;
-    if(node.mesh && node.material)draw(*node.mesh,*node.material,world,node.tint);
-    for(const Node& child:node.children)drawNode(child,world);
+    int nodePattern=node.material==&fishMaterial?fishPattern:-1;
+    if(node.mesh && node.material)draw(*node.mesh,*node.material,world,node.tint,0,emission,nodePattern);
+    for(const Node& child:node.children)drawNode(child,world,fishPattern,emission);
 }
-void Scene::render(const Camera& camera,const Settings& s,float time,int width,int height) {
+void Scene::render(const Camera& camera,const Settings& s,float time,int width,int height,int selectedFish) {
     drawCalls=0;triangleCount=0;
     float aspect=float(width)/height;
     Mat4 view=camera.view(),projection=perspective(camera.fov,aspect,.08f,100.0f);
@@ -100,18 +159,14 @@ void Scene::render(const Camera& camera,const Settings& s,float time,int width,i
     draw(branch,coralMaterial,featured.matrix(),{1.0f,.37f,.44f,1});
     if(s.ui) draw(ring,plainMaterial,translate({base.x,seabedHeight(base.x,base.z)+.08f,base.z}),{.90f,.77f,.37f,1},0,.30f);
     for(int i=0;i<fishCount;++i) {
-        bool group=(i%2)==0;float phase=float(i)*.61f,timeScale=group?.30f:-.24f;
-        float a=time*timeScale+phase,rx=group?6.5f:4.8f,rz=group?4.0f:3.3f;
-        Vec3 center=group?Vec3(-3.0f,2.4f,-8.0f):Vec3(4.2f,3.5f,-9.5f);
-        Vec3 p=center+Vec3(std::cos(a)*rx,.45f*std::sin(a*1.7f+phase),std::sin(a)*rz);
-        Vec3 velocity(-std::sin(a)*rx*timeScale,0,std::cos(a)*rz*timeScale);
-        float yaw=std::atan2(-velocity.z,velocity.x),size=.75f+float(i%4)*.09f;
-        fish.local=translate(p)*rotateY(yaw)*scale(Vec3(size));
-        Vec4 tint=group?Vec4{1.0f,.78f,.25f,1}:Vec4{.40f,.86f,1.0f,1};
+        FishInfo info=describeFish(i,time);
+        fish.local=translate(info.position)*rotateY(info.yaw)*scale(Vec3(info.scale));
+        Vec4 tint=info.color;
         fish.children[0].tint=tint;fish.children[1].children[0].tint=tint;
         fish.children[2].tint=fish.children[3].tint=fish.children[4].tint=tint;
+        float phase=float(i)*.61f;
         fish.children[1].local=translate({-.43f,0,0})*rotateY(std::sin(time*8+phase)*.48f);
-        drawNode(fish,Mat4::identity());
+        drawNode(fish,Mat4::identity(),info.species,i==selectedFish?.30f:0.0f);
     }
     glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
     if(s.bubbles) {

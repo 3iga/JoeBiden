@@ -6,7 +6,12 @@ out vec4 fragColor;
 uniform sampler2D uDiffuse,uNormalMap,uCaustics;
 uniform vec3 uEye,uLightDirection;
 uniform bool uLighting,uTexturing,uNormalMapping,uShowCaustics,uFog;
+uniform int uFishPattern;
 uniform float uTime,uUVScale,uShininess,uSpecular,uEmission;
+
+float stripe(float x,float center,float width) {
+    return 1.0-smoothstep(width*.58,width,abs(x-center));
+}
 
 vec3 mappedNormal(vec3 N,vec2 uv) {
     // Reconstruct tangent/bitangent from screen derivatives; no extra mesh attribute.
@@ -24,6 +29,27 @@ vec3 mappedNormal(vec3 N,vec2 uv) {
 void main() {
     vec2 uv=vUV*uUVScale;
     vec3 albedo=vTint.rgb*(uTexturing ? texture(uDiffuse,uv).rgb : vec3(1.0));
+    if(uFishPattern>=0) {
+        float alongBody=cos(vUV.x*6.2831853);
+        if(uFishPattern==0) {
+            float bars=max(max(stripe(alongBody,-.50,.105),stripe(alongBody,-.04,.105)),stripe(alongBody,.43,.09));
+            albedo=mix(albedo,vec3(1.0,.91,.69),bars*.96);
+        } else if(uFishPattern==1) {
+            float bars=max(max(stripe(alongBody,-.46,.055),stripe(alongBody,-.08,.055)),stripe(alongBody,.34,.05));
+            albedo=mix(albedo,vec3(.025,.16,.28),bars*.88);
+            float tailPatch=1.0-smoothstep(-.91,-.67,alongBody);
+            albedo=mix(albedo,vec3(1.0,.82,.20),tailPatch*.94);
+        } else if(uFishPattern==2) {
+            float bars=max(max(stripe(alongBody,-.57,.055),stripe(alongBody,-.20,.055)),stripe(alongBody,.18,.055));
+            albedo=mix(albedo,vec3(.18,.15,.11),bars*.90);
+            float face=1.0-smoothstep(.68,.90,alongBody);
+            albedo=mix(albedo,vec3(.15,.68,.92),face*.52);
+        } else {
+            float scaleLines=abs(sin(vUV.x*125.66+sin(vUV.y*50.27)*.36));
+            float scales=1.0-smoothstep(.035,.19,scaleLines);
+            albedo=mix(albedo,vec3(.78,.98,.73),scales*.34);
+        }
+    }
     vec3 N=normalize(vNormal);
     if(!gl_FrontFacing) N=-N; // Thin leaves/fins are intentionally two-sided.
     if(uNormalMapping && uTexturing) N=mappedNormal(N,uv);

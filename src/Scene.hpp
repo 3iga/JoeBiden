@@ -1,6 +1,7 @@
 #pragma once
 #include "Graphics.hpp"
 #include "Procedural.hpp"
+#include <array>
 namespace reef {
 struct Camera {
     Vec3 position{9.6f,5.0f,13.5f};
@@ -31,6 +32,14 @@ struct Node {
     Vec4 tint{1,1,1,1};
     std::vector<Node> children;
 };
+struct FishInfo {
+    int index=-1,species=0,lengthCm=0;
+    const char* name="";
+    const char* trait="";
+    float weightKg=0,scale=1,yaw=0;
+    Vec3 position{};
+    Vec4 color{1,1,1,1};
+};
 class Scene {
     Shader shader,background,bubbleShader;
     Mesh sand,branch,tube,plate,rock,kelp,sphere,tail,fin,ring;
@@ -39,18 +48,23 @@ class Scene {
     Node fish;
     GLuint emptyVAO=0,bubbleVAO=0,bubbleVBO=0;
     std::vector<Vec4> bubbleOrigins;
+    std::array<bool,4> discoveredFish{};
     int coralCount=0,fishCount=24;
     void material(const Material& m);
-    void draw(Mesh& mesh,Material& material,const Mat4& model,Vec4 tint,float sway=0,float emission=0);
+    void draw(Mesh& mesh,Material& material,const Mat4& model,Vec4 tint,float sway=0,float emission=0,int fishPattern=-1);
     void drawInstances(Mesh& mesh,Material& material,float sway=0);
-    void drawNode(const Node& node,const Mat4& parent);
+    void drawNode(const Node& node,const Mat4& parent,int fishPattern=-1,float emission=0);
 public:
     Transform featured;
     int drawCalls=0,triangleCount=0;
     explicit Scene(const std::filesystem::path& shaderPath);
     ~Scene();
     void regenerate(const Settings& settings);
-    void render(const Camera& camera,const Settings& settings,float time,int width,int height);
+    void render(const Camera& camera,const Settings& settings,float time,int width,int height,int selectedFish=-1);
+    FishInfo fishInfo(int index,float time) const;
+    int pickFish(const Camera& camera,float mouseX,float mouseY,int width,int height,float time) const;
+    void discoverFish(int index);
+    int discoveredSpeciesCount() const;
     int corals() const { return coralCount+1; }
     int fishes() const { return fishCount; }
 };

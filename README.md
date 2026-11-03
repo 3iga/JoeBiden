@@ -51,7 +51,7 @@ For offline configuration, extract the complete official **GLFW 3.4 source** arc
 
 The reef includes three procedural coral mesh types: branching coral, open tube clusters and layered plate coral. A seeded minimum-distance sampler distributes the coral field. Scale, rotation and tint vary per instance. The sampler reserves a dive lane and a small area for one deliberately fixed, inspectable coral.
 
-The seabed is a triangulated height surface, rocks are deformed parametric spheres, and kelp consists of curved ribbons with analytic vertex-shader sway. Fish use an explicit parent-child transform hierarchy: a swimming root contains a body, fins, eyes and a tail pivot. Their elliptical routes and tail oscillation are scripted, not schooling AI.
+The seabed is a triangulated height surface, rocks are deformed parametric spheres, and kelp consists of curved ribbons with analytic vertex-shader sway. Fish use an explicit parent-child transform hierarchy: a swimming root contains a body, fins, eyes and a tail pivot. Four species have distinct procedural scale patterns, colors and field-guide records. Click a fish with the cursor released to inspect its species, length, weight and trait; the field log tracks which species you have found. Their elliptical routes and tail oscillation are scripted, not schooling AI.
 
 The lighting combines ambient, diffuse and Blinn-Phong specular terms. A generated caustic texture is projected in world-space XZ and animated with two scrolling layers. Generated diffuse and tangent-space normal textures add surface detail. Distance fog, a water-colored background and additive bubble sprites complete the underwater appearance.
 
@@ -61,8 +61,9 @@ Coral, rock and kelp meshes use instanced drawing. The UI exposes actual accepte
 
 | Key / input | Action |
 |---|---|
-| Left-click the reef | Capture mouse and enter manual camera mode |
-| Tab | Capture/release the mouse; release it to click the menu |
+| Left-click a fish with the cursor released | Scan it and open its field-guide record |
+| Left-click open water | Capture mouse and enter manual camera mode |
+| Tab | Capture/release the mouse; release it to use the menu and scan fish |
 | Mouse | Look around while captured |
 | W / A / S / D | Move forward / left / backward / right |
 | Space / Left Ctrl | Swim up / down |

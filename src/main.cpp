@@ -24,7 +24,7 @@ std::string vectorText(Vec3 v) { return number(v.x)+" / "+number(v.y)+" / "+numb
 void help() {
     std::cout<<"Luminous Reef -- C++17 / modern OpenGL\n"
       "Controls: WASD move, SPACE/CTRL up/down, SHIFT faster, mouse look, scroll zoom.\n"
-      "TAB mouse, G tour, HOME reset camera, F2 focus coral, R regenerate, Z density, P pause.\n"
+      "TAB release cursor; click fish to scan it. G tour, HOME reset camera, F2 focus coral.\n"
       "B lighting, C caustics, T textures, N normal maps, F fog, M wireframe, V vsync.\n"
       "1 move / 2 rotate / 3 scale featured coral; J/L X, K/I Y, U/O Z; BACKSPACE reset.\n"
       "H hide UI, F12 screenshot, ESC exit.\n\n"
@@ -144,7 +144,7 @@ void keyboard(GLFWwindow* w,Input& in,Camera& camera,Scene& scene,Settings& s,fl
     }
     camera.fov=clamp(camera.fov-float(in.scroll)*radians(2),radians(30),radians(85));
 }
-void panel(UI& ui,Scene& scene,Settings& s,Camera& camera,Input& in,int w,int h,float fps,float ms,float time) {
+void panel(UI& ui,Scene& scene,Settings& s,Camera& camera,Input& in,int w,int h,float fps,float ms,float time,int selectedFish) {
     const Vec4 white{.89f,.97f,.93f,1},muted{.54f,.76f,.76f,1},gold{.94f,.79f,.40f,1};
     ui.rect(24,24,348,91,{.025f,.115f,.15f,.85f});ui.rect(24,24,3,91,{.47f,.87f,.75f,1});
     ui.text(42,38,"LUMINOUS REEF",2.65f,white);
@@ -183,15 +183,27 @@ void panel(UI& ui,Scene& scene,Settings& s,Camera& camera,Input& in,int w,int h,
     ui.rect(24,float(h)-88,344,33,{.019f,.088f,.115f,.86f});
     ui.text(35,float(h)-77,"FPS "+number(fps,0)+" / "+number(ms)+" MS / SEED "+std::to_string(s.seed),1.2f,white);
     ui.rect(24,float(h)-49,float(w)-48,27,{.019f,.088f,.115f,.9f});
-    ui.text(35,float(h)-40,"WASD SWIM   SPACE/CTRL UP/DOWN   TAB MOUSE   HOME RESET   F2 FOCUS   H UI   F12 PHOTO   ESC EXIT",1.15f,white);
-    ui.text(26,132,in.captured?"DIVE MODE / TAB TO OPEN CONTROLS":"CLICK THE REEF TO DIVE / OR TRY G: TOUR",1.17f,gold);
+    ui.text(35,float(h)-40,"WASD SWIM   SPACE/CTRL UP/DOWN   TAB CURSOR   CLICK FISH TO SCAN   HOME RESET   F2 FOCUS   H UI   F12 PHOTO   ESC EXIT",1.15f,white);
+    ui.text(26,132,in.captured?"DIVE MODE / TAB TO INSPECT FISH":"CLICK FISH TO SCAN / OPEN WATER TO DIVE",1.17f,gold);
     ui.text(26,154,std::to_string(scene.corals())+" CORALS / "+std::to_string(scene.fishes())+" FISH / "+std::to_string(scene.drawCalls)+" SCENE DRAWS",1.13f,muted);
     ui.text(26,174,std::to_string(scene.triangleCount/1000)+"K MESH TRIANGLES / TIME "+number(time)+" S",1.10f,muted);
+    ui.rect(24,208,348,142,{.019f,.088f,.115f,.92f});ui.rect(24,208,3,142,{.94f,.79f,.40f,1});
+    ui.text(42,218,"FISH FIELD GUIDE",1.45f,gold);
+    if(selectedFish>=0) {
+        FishInfo info=scene.fishInfo(selectedFish,time);
+        ui.text(42,242,"SPECIMEN "+std::to_string(info.index+1)+" / "+info.name,1.15f,white);
+        ui.text(42,260,"LENGTH "+std::to_string(info.lengthCm)+" CM / WEIGHT "+number(info.weightKg)+" KG",1.15f,white);
+        ui.text(42,278,std::string("TRAIT ")+info.trait,1.15f,muted);
+    } else {
+        ui.text(42,244,"CLICK A FISH TO SCAN IT",1.15f,white);
+        ui.text(42,264,"REVEAL ALL 4 SPECIES",1.15f,muted);
+    }
+    ui.text(42,316,"FIELD LOG "+std::to_string(scene.discoveredSpeciesCount())+"/4 SPECIES FOUND",1.15f,gold);
     // Crosshair only when steering. The right-hand menu remains visible for hotkey reference.
     if(in.captured) {ui.rect(float(w)/2-5,float(h)/2,11,1,muted);ui.rect(float(w)/2,float(h)/2-5,1,11,muted);}
 }
 int run(GLFWwindow* window,const Options& options,const char* executable) {
-    Settings settings=options.settings;Camera camera;camera.reset();Input input;
+    Settings settings=options.settings;Camera camera;camera.reset();Input input;int selectedFish=-1;
     glfwSetWindowUserPointer(window,&input);
     glfwSetKeyCallback(window,[](GLFWwindow* w,int key,int,int action,int){
         auto* i=static_cast<Input*>(glfwGetWindowUserPointer(w));
@@ -222,14 +234,19 @@ int run(GLFWwindow* window,const Options& options,const char* executable) {
         glfwGetFramebufferSize(window,&width,&height);glfwGetWindowSize(window,&windowW,&windowH);
         if(width==0||height==0){input.clear();glfwWaitEventsTimeout(.1);continue;}
         glViewport(0,0,width,height);glClearColor(.025f,.23f,.28f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-        scene.render(camera,settings,simulationTime,width,height);
+        scene.render(camera,settings,simulationTime,width,height,selectedFish);
         double mx=0,my=0;glfwGetCursorPos(window,&mx,&my);
         ui.begin(windowW,windowH,input.captured?-100:float(mx),input.captured?-100:float(my),input.click&&!input.captured);
         bool previousVsync=settings.vsync;
-        if(settings.ui)panel(ui,scene,settings,camera,input,windowW,windowH,fps,ms,simulationTime);
+        if(settings.ui)panel(ui,scene,settings,camera,input,windowW,windowH,fps,ms,simulationTime,selectedFish);
         if(previousVsync!=settings.vsync)glfwSwapInterval(settings.vsync?1:0);
         bool overPanel=settings.ui&&mx>=windowW-280&&my>=24&&my<=616;
-        if(input.click&&!input.captured&&!overPanel&&!ui.handled()){setCapture(window,input,true);settings.tour=false;}
+        bool overFieldGuide=settings.ui&&mx>=24&&mx<=372&&my>=208&&my<=350;
+        if(input.click&&!input.captured&&!overPanel&&!overFieldGuide&&!ui.handled()) {
+            int fish=scene.pickFish(camera,float(mx),float(my),windowW,windowH,simulationTime);
+            if(fish>=0) {selectedFish=fish;scene.discoverFish(fish);settings.tour=false;}
+            else {selectedFish=-1;setCapture(window,input,true);settings.tour=false;}
+        }
         if(settings.ui)ui.finish();
         if(input.pressed[GLFW_KEY_F12]) {
             auto name=std::filesystem::path("screenshots")/("reef_"+std::to_string(std::chrono::system_clock::now().time_since_epoch().count())+"_"+std::to_string(screenshotIndex++)+".bmp");

@@ -109,7 +109,11 @@ void makeMaterial(Material& m,int kind) {
         if(kind==0) { h=.5f+.33f*std::sin(8*b+1.2f*std::sin(2*a))+.07f*fine;c=Vec3(.86f,.83f,.67f)*(.83f+.19f*h); }
         if(kind==1) { h=.45f+.30f*std::sin(12*a+std::sin(3*b))*std::sin(12*b)+.10f*fine;c=Vec3(.88f+.12f*h); }
         if(kind==2) { h=.5f+.18f*std::sin(3*a+std::cos(2*b))+.15f*std::cos(5*b+std::sin(4*a))+.1f*fine;c=Vec3(.47f,.54f,.48f)*(.7f+.45f*h); }
-        if(kind==3) { float band=std::pow(.5f+.5f*std::sin(5*a+std::sin(b)),16);h=.5f+.03f*std::sin(24*a)*std::sin(14*b);c=mix(Vec3(.72f,.87f,.96f),Vec3(.13f,.23f,.31f),band*.88f); }
+        if(kind==3) {
+            float scales=.5f+.5f*std::sin(32*a+2.2f*std::sin(5*b))*std::sin(24*b+1.4f*std::sin(3*a));
+            h=.5f+.035f*std::sin(18*a)*std::sin(12*b)+.025f*scales;
+            c=Vec3(.82f,.94f,.91f)*(.88f+.12f*scales);
+        }
         if(kind==4) { h=.5f+.2f*std::sin(6*a);c=Vec3(.48f,.82f,.45f)*(.80f+.2f*h); }
         heights[y*N+x]=h;int k=(y*N+x)*3;
         color[k]=byte(c.x);color[k+1]=byte(c.y);color[k+2]=byte(c.z);
