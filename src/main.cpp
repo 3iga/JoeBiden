@@ -1,171 +1,218 @@
+#ifndef _WIN32
+#error Luminous Reef targets Windows 10/11 x64 only. Use build.bat.
+#endif
+#include <Windows.h>
+#include <glad/gl.h>
+#include <GLFW/glfw3.h>
 #include "Renderer.hpp"
 #include "Update.hpp"
-#ifndef GLFW_INCLUDE_NONE
-#define GLFW_INCLUDE_NONE
-#endif
-#include <GLFW/glfw3.h>
+#include "ProjectInfo.hpp"
 #include <array>
-#include <chrono>
-#include <cmath>
-#include <iomanip>
+#include <cstdio>
+#include <ctime>
+#include <fstream>
 #include <iostream>
-#include <sstream>
+#include <string>
 
-
-namespace {
-struct Options {
-    Settings settings;int width=1280,height=800,frames=0,captureEvery=1,inspect=-1;
-    float fixedDt=0;bool checkGL=false,hasPosition=false;
-    double x=0,z=0;std::string capture,captureDir;
-};
-void help() {
-    std::cout<<"Luminous Reef - C++17 / GLFW / GLAD / Dear ImGui / modern OpenGL\n"
-        "WASD move, Space/Ctrl height, Shift fast, Tab cursor, click fish to inspect.\n"
-        "B lighting, C caustics, T textures, N normals, F fog, P pause, M wireframe.\n"
-        "R seed, Z density, G tour, Home origin, F2 coral, H UI, V vsync, F12 screenshot.\n"
-        "1 move / 2 rotate / 3 scale coral; J/L X, K/I Y, U/O Z; Backspace reset.\n"
-        "Options: --width N --height N --seed N --quality low|medium|high\n"
-        " --hour H --no-cycle --visibility N --position X Z --inspect SPECIES_INDEX\n"
-        " --tour --no-ui --no-vsync --no-fog --no-caustics --unlit\n"
-        " --no-textures --no-normals --no-bubbles --wireframe\n"
-        " --frames N --fixed-dt SEC --capture FILE.bmp --capture-dir DIR\n"
-        " --capture-every N --check-gl\n";
-}
-Options parse(int argc,char** argv) {
-    Options o;
-    auto value=[&](int& i){if(++i>=argc)throw std::runtime_error("Missing option value");return std::string(argv[i]);};
-    auto number=[&](int& i){auto s=value(i);std::size_t n=0;double x=std::stod(s,&n);if(n!=s.size()||!std::isfinite(x))throw std::runtime_error("Invalid numeric option: "+s);return x;};
-    auto integer=[&](int& i){double x=number(i);if(x<0||x>1000000000||std::floor(x)!=x)throw std::runtime_error("Expected a nonnegative integer");return int(x);};
-    for(int i=1;i<argc;++i) {
-        std::string a=argv[i];
-        if(a=="--width")o.width=integer(i);else if(a=="--height")o.height=integer(i);
-        else if(a=="--seed"){auto s=value(i);std::size_t end=0;auto seed=std::stoull(s,&end);if(end!=s.size()||seed>0xffffffffULL||s.front()=='-')throw std::runtime_error("Seed must be uint32");o.settings.seed=std::uint32_t(seed);}
-        else if(a=="--frames")o.frames=integer(i);else if(a=="--capture-every")o.captureEvery=integer(i);
-        else if(a=="--fixed-dt")o.fixedDt=float(number(i));else if(a=="--hour")o.settings.hour=float(number(i));
-        else if(a=="--visibility")o.settings.visibility=float(number(i));else if(a=="--inspect")o.inspect=integer(i);
-        else if(a=="--position"){o.x=number(i);o.z=number(i);o.hasPosition=true;}
-        else if(a=="--capture")o.capture=value(i);else if(a=="--capture-dir")o.captureDir=value(i);
-        else if(a=="--quality"){auto q=value(i);if(q=="low")o.settings.quality=0;else if(q=="medium")o.settings.quality=1;else if(q=="high")o.settings.quality=2;else throw std::runtime_error("Quality must be low, medium or high");}
-        else if(a=="--tour")o.settings.tour=true;else if(a=="--no-ui")o.settings.ui=false;else if(a=="--no-vsync")o.settings.vsync=false;
-        else if(a=="--no-fog")o.settings.fog=false;else if(a=="--no-caustics")o.settings.caustics=false;else if(a=="--unlit")o.settings.lighting=false;
-        else if(a=="--no-textures")o.settings.textures=false;else if(a=="--no-normals")o.settings.normalMaps=false;
-        else if(a=="--no-bubbles")o.settings.bubbles=false;else if(a=="--wireframe")o.settings.wireframe=true;
-        else if(a=="--no-cycle")o.settings.dayCycle=false;else if(a=="--check-gl")o.checkGL=true;
-        else throw std::runtime_error("Unknown option: "+a+" (use --help)");
-    }
-    if(o.width<320||o.height<240||o.width>7680||o.height>4320||o.fixedDt<0||o.fixedDt>.25f||o.captureEvery<1||
-       o.settings.hour<0||o.settings.hour>=24||o.settings.visibility<24||o.settings.visibility>96||o.inspect>=SpeciesCount||
-       std::abs(o.x)>1e12||std::abs(o.z)>1e12)throw std::runtime_error("Option is outside its supported range");
-    if(!o.capture.empty()&&o.frames==0)throw std::runtime_error("--capture requires --frames N; use F12 interactively");
-    return o;
-}
-struct Window {
-    GLFWwindow* handle=nullptr;
-    Window(int width,int height) {
-        glfwSetErrorCallback([](int code,const char* text){std::cerr<<"GLFW "<<code<<": "<<text<<'\n';});
-        if(!glfwInit())throw std::runtime_error("GLFW initialization failed. Check the GPU driver.");
-        const int versions[][3]={{4,1,4},{3,3,4},{3,3,0}};
-        for(const auto& v:versions) {
-            glfwDefaultWindowHints();glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,v[0]);glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,v[1]);
-            glfwWindowHint(GLFW_OPENGL_PROFILE,GLFW_OPENGL_CORE_PROFILE);glfwWindowHint(GLFW_SAMPLES,v[2]);
-#ifdef __APPLE__
-            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT,GLFW_TRUE);
-#endif
-            handle=glfwCreateWindow(width,height,"Luminous Reef - complete project",nullptr,nullptr);if(handle)break;
-        }
-        if(!handle){glfwTerminate();throw std::runtime_error("An OpenGL 3.3+ Core graphics driver is required");}
-        glfwMakeContextCurrent(handle);
-        if(!gladLoadGL(reinterpret_cast<GLADloadfunc>(glfwGetProcAddress))){glfwDestroyWindow(handle);handle=nullptr;glfwTerminate();throw std::runtime_error("GLAD loading failed");}
-        std::cout<<"OpenGL: "<<glGetString(GL_VERSION)<<"\nGPU: "<<glGetString(GL_RENDERER)<<'\n';
-    }
-    ~Window(){if(handle)glfwDestroyWindow(handle);glfwTerminate();}
-};
 struct Input {
-    std::array<bool,GLFW_KEY_LAST+1> pressed{};bool click=false,captured=false,firstMouse=true;
-    double lastX=0,lastY=0,scroll=0;
-    void clear(){pressed.fill(false);click=false;scroll=0;}
+    std::array<bool, GLFW_KEY_LAST + 1> pressed{};
+    bool click = false, captured = false, firstMouse = true;
+    double lastX = 0, lastY = 0, scroll = 0;
+    void clear() { pressed.fill(false); click = false; scroll = 0; }
 };
-void capture(GLFWwindow* w,Input& in,bool on) {
-    in.captured=on;in.firstMouse=true;glfwSetInputMode(w,GLFW_CURSOR,on?GLFW_CURSOR_DISABLED:GLFW_CURSOR_NORMAL);
-    if(glfwRawMouseMotionSupported())glfwSetInputMode(w,GLFW_RAW_MOUSE_MOTION,on?GLFW_TRUE:GLFW_FALSE);
+
+static void captureMouse(GLFWwindow* window, Input& input, bool capture) {
+    input.captured = capture;
+    input.firstMouse = true;
+    glfwSetInputMode(window, GLFW_CURSOR, capture ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+    if (glfwRawMouseMotionSupported())
+        glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, capture ? GLFW_TRUE : GLFW_FALSE);
 }
-void gather(GLFWwindow* w,Input& input,InputFrame& frame,bool keyboardBlocked,bool mouseBlocked) {
-    auto down=[&](int key){return glfwGetKey(w,key)==GLFW_PRESS;};
-    if(!keyboardBlocked) {
-        const std::pair<int,Action> mapping[]={{GLFW_KEY_B,Action::Lighting},{GLFW_KEY_C,Action::Caustics},{GLFW_KEY_T,Action::Textures},
-            {GLFW_KEY_N,Action::Normals},{GLFW_KEY_F,Action::Fog},{GLFW_KEY_P,Action::Pause},{GLFW_KEY_M,Action::Wireframe},
-            {GLFW_KEY_H,Action::UI},{GLFW_KEY_G,Action::Tour},{GLFW_KEY_V,Action::Vsync},{GLFW_KEY_R,Action::NewSeed},
-            {GLFW_KEY_Z,Action::Quality},{GLFW_KEY_HOME,Action::Home},{GLFW_KEY_F2,Action::Focus},
-            {GLFW_KEY_BACKSPACE,Action::ResetCoral},{GLFW_KEY_1,Action::MoveMode},{GLFW_KEY_2,Action::RotateMode},{GLFW_KEY_3,Action::ScaleMode}};
-        for(const auto& p:mapping)if(input.pressed[std::size_t(p.first)])frame.press(p.second);
-        frame.move={float(down(GLFW_KEY_D))-float(down(GLFW_KEY_A)),float(down(GLFW_KEY_SPACE))-float(down(GLFW_KEY_LEFT_CONTROL)),float(down(GLFW_KEY_W))-float(down(GLFW_KEY_S))};
-        frame.transformAxis={float(down(GLFW_KEY_L))-float(down(GLFW_KEY_J)),float(down(GLFW_KEY_I))-float(down(GLFW_KEY_K)),float(down(GLFW_KEY_O))-float(down(GLFW_KEY_U))};
-        frame.fast=down(GLFW_KEY_LEFT_SHIFT);
-    }
-    if(input.captured) {
-        double x=0,y=0;glfwGetCursorPos(w,&x,&y);
-        if(input.firstMouse){input.lastX=x;input.lastY=y;input.firstMouse=false;}
-        frame.looking=true;frame.mouseDelta={float(x-input.lastX),float(y-input.lastY)};input.lastX=x;input.lastY=y;
-    }
-    if(!mouseBlocked||input.captured)frame.scroll=float(input.scroll);
+
+static std::filesystem::path executableFolder() {
+    std::array<wchar_t, 32768> buffer{};
+    DWORD count = GetModuleFileNameW(nullptr, buffer.data(), DWORD(buffer.size()));
+    if (count == 0 || count >= buffer.size()) return {};
+    return std::filesystem::path(std::wstring(buffer.data(), count)).parent_path();
 }
-int run(GLFWwindow* window,const Options& o,const char* executable) {
-    Scene scene;scene.settings=o.settings;Update update;update.initialize(scene);
-    if(o.hasPosition) {
-        scene.origin={static_cast<std::int64_t>(std::floor((o.x+12)/ChunkSize)),static_cast<std::int64_t>(std::floor((o.z+12)/ChunkSize))};
-        scene.camera.position={float(o.x-double(scene.origin.first)*ChunkSize),5,float(o.z-double(scene.origin.second)*ChunkSize)};
-        scene.camera.position.y=scene.floorAt(scene.camera.position)+5;update.regenerate(scene);
+
+static InputFrame readInput(GLFWwindow* window, Input& input, bool allowMouse) {
+    InputFrame frame;
+    const std::pair<int, Action> keys[] = {
+        {GLFW_KEY_B, Action::Lighting}, {GLFW_KEY_C, Action::Caustics},
+        {GLFW_KEY_T, Action::Textures}, {GLFW_KEY_N, Action::Normals},
+        {GLFW_KEY_F, Action::Fog}, {GLFW_KEY_P, Action::Pause},
+        {GLFW_KEY_M, Action::Wireframe}, {GLFW_KEY_H, Action::UI},
+        {GLFW_KEY_G, Action::Tour}, {GLFW_KEY_V, Action::Vsync},
+        {GLFW_KEY_R, Action::NewSeed}, {GLFW_KEY_Z, Action::Quality},
+        {GLFW_KEY_HOME, Action::Home}, {GLFW_KEY_F2, Action::Focus},
+        {GLFW_KEY_BACKSPACE, Action::ResetCoral}, {GLFW_KEY_1, Action::MoveMode},
+        {GLFW_KEY_2, Action::RotateMode}, {GLFW_KEY_3, Action::ScaleMode},
+        {GLFW_KEY_ENTER, Action::StartSurvey}, {GLFW_KEY_F5, Action::RestartSurvey},
+        {GLFW_KEY_F1, Action::Help}
+    };
+    for (const auto& key : keys) if (input.pressed[std::size_t(key.first)]) frame.press(key.second);
+    auto down = [window](int key) { return glfwGetKey(window, key) == GLFW_PRESS ? 1.0f : 0.0f; };
+    // Deliberately independent of ImGui::WantCaptureKeyboard.
+    frame.move = {down(GLFW_KEY_D) - down(GLFW_KEY_A),
+                  down(GLFW_KEY_SPACE) - down(GLFW_KEY_LEFT_CONTROL),
+                  down(GLFW_KEY_W) - down(GLFW_KEY_S)};
+    frame.transformAxis = {down(GLFW_KEY_L) - down(GLFW_KEY_J),
+                           down(GLFW_KEY_I) - down(GLFW_KEY_K),
+                           down(GLFW_KEY_O) - down(GLFW_KEY_U)};
+    frame.fast = down(GLFW_KEY_LEFT_SHIFT) != 0;
+    frame.scroll = allowMouse ? float(input.scroll) : 0;
+    frame.looking = input.captured;
+    if (input.captured) {
+        double x = 0, y = 0;
+        glfwGetCursorPos(window, &x, &y);
+        if (input.firstMouse) { input.lastX = x; input.lastY = y; input.firstMouse = false; }
+        frame.mouseDelta = {float(x - input.lastX), float(y - input.lastY)};
+        input.lastX = x;
+        input.lastY = y;
     }
-    if(o.inspect>=0){scene.guideSpecies=o.inspect;scene.showFishInfo=true;}
-    Input input;glfwSetWindowUserPointer(window,&input);
-    glfwSetKeyCallback(window,[](GLFWwindow* w,int k,int,int action,int){if(k>=0&&k<=GLFW_KEY_LAST&&action==GLFW_PRESS)static_cast<Input*>(glfwGetWindowUserPointer(w))->pressed[std::size_t(k)]=true;});
-    glfwSetMouseButtonCallback(window,[](GLFWwindow* w,int b,int action,int){if(b==GLFW_MOUSE_BUTTON_LEFT&&action==GLFW_PRESS)static_cast<Input*>(glfwGetWindowUserPointer(w))->click=true;});
-    glfwSetScrollCallback(window,[](GLFWwindow* w,double,double y){static_cast<Input*>(glfwGetWindowUserPointer(w))->scroll+=y;});
-    glfwSetWindowFocusCallback(window,[](GLFWwindow* w,int focused){if(!focused){auto& in=*static_cast<Input*>(glfwGetWindowUserPointer(w));capture(w,in,false);in.clear();}});
-    auto shaders=locateShaders(executable);Renderer renderer(shaders,shaders.parent_path()/"assets");Ui ui;
-    float sx=1,sy=1;glfwGetWindowContentScale(window,&sx,&sy);renderer.initializeUI(window,std::min(sx,sy));
-    bool lastVsync=scene.settings.vsync;glfwSwapInterval(lastVsync?1:0);
-    double previous=glfwGetTime(),runStart=previous,statsStart=previous;int frame=0,statsFrames=0;float fps=0,ms=0;
-    while(!glfwWindowShouldClose(window)) {
-        glfwPollEvents();double now=glfwGetTime();float dt=o.fixedDt>0?o.fixedDt:clamp(float(now-previous),0,.05f);previous=now;
-        int width=0,height=0,windowW=0,windowH=0;glfwGetFramebufferSize(window,&width,&height);glfwGetWindowSize(window,&windowW,&windowH);
-        if(width<=0||height<=0||windowW<=0||windowH<=0){input.clear();glfwWaitEventsTimeout(.1);continue;}
-        if(input.pressed[GLFW_KEY_ESCAPE])break;
-        if(input.pressed[GLFW_KEY_TAB])capture(window,input,!input.captured);
-        renderer.beginUI();InputFrame commands=ui.build(scene,renderer.stats(),renderer.photos(),input.captured,fps,ms);
-        gather(window,input,commands,renderer.wantsKeyboard(),renderer.wantsMouse());
-        if(commands.pressed(Action::Home)||commands.pressed(Action::Focus)||commands.pressed(Action::Tour)){capture(window,input,false);commands.looking=false;}
-        update.step(scene,commands,dt);
-        if(lastVsync!=scene.settings.vsync){lastVsync=scene.settings.vsync;glfwSwapInterval(lastVsync?1:0);}
-        renderer.render(scene,width,height);
-        if(input.click&&!input.captured&&!renderer.wantsMouse()) {
-            double mx=0,my=0;glfwGetCursorPos(window,&mx,&my);
-            int x=int(std::floor(mx*width/windowW)),y=height-1-int(std::floor(my*height/windowH));
-            int picked=renderer.pick(scene,x,y);
-            if(picked>=0)update.selectFish(scene,picked);else {update.selectFish(scene,-1);capture(window,input,true);scene.settings.tour=false;}
+    return frame;
+}
+
+static bool recordPerformance(const std::filesystem::path& folder, const Scene& scene,
+                              const RenderStats& stats, float fps, int width, int height) {
+    std::error_code error;
+    std::filesystem::create_directories(folder, error);
+    if (error) { std::cerr << "ERROR: benchmark folder: " << error.message() << '\n'; return false; }
+    auto path = folder / "fps_samples.csv";
+    bool exists = std::filesystem::exists(path, error);
+    std::ofstream file(path, std::ios::app);
+    if (!file) { std::cerr << "ERROR: cannot open " << path << '\n'; return false; }
+    if (!exists) file << "unix_time,gpu,width,height,configuration,caustics,lighting,fog,normal_maps,quality,visibility,vsync,paused,fps,frame_ms,draws,triangles\n";
+    file << std::time(nullptr) << ",\"" << glGetString(GL_RENDERER) << "\"," << width << ',' << height
+         << ",Debug," << scene.settings.caustics << ',' << scene.settings.lighting << ','
+         << scene.settings.fog << ',' << scene.settings.normalMaps << ',' << scene.settings.quality << ','
+         << scene.settings.visibility << ',' << scene.settings.vsync << ',' << scene.settings.paused << ','
+         << fps << ',' << (fps > 0 ? 1000 / fps : 0) << ',' << stats.draws << ',' << stats.triangles << '\n';
+    if (!file) return false;
+    std::cout << "Saved measured frame-rate sample: " << path << '\n';
+    return true;
+}
+
+static int run(GLFWwindow* window, const std::filesystem::path& folder) {
+    Input input;
+    glfwSetWindowUserPointer(window, &input);
+    glfwSetKeyCallback(window, [](GLFWwindow* w, int key, int, int action, int) {
+        auto* in = static_cast<Input*>(glfwGetWindowUserPointer(w));
+        if (key >= 0 && key <= GLFW_KEY_LAST && action == GLFW_PRESS) in->pressed[std::size_t(key)] = true;
+    });
+    glfwSetMouseButtonCallback(window, [](GLFWwindow* w, int button, int action, int) {
+        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+            static_cast<Input*>(glfwGetWindowUserPointer(w))->click = true;
+    });
+    glfwSetScrollCallback(window, [](GLFWwindow* w, double, double y) {
+        static_cast<Input*>(glfwGetWindowUserPointer(w))->scroll += y;
+    });
+    glfwSetWindowFocusCallback(window, [](GLFWwindow* w, int focused) {
+        auto* in = static_cast<Input*>(glfwGetWindowUserPointer(w));
+        in->clear();
+        if (!focused) captureMouse(w, *in, false);
+    });
+
+    Scene scene;
+    Update update;
+    update.initialize(scene);
+    Renderer renderer(folder / "shaders", folder / "assets");
+    if (!renderer.valid() || !Renderer::checkErrors() || !renderer.initializeUI(window)) return 1;
+    Ui ui;
+    glfwSwapInterval(1);
+    bool previousVsync = true;
+    double previous = glfwGetTime(), statisticsStart = previous;
+    int statisticsFrames = 0, screenshotIndex = 0;
+    float fps = 0, frameMs = 0;
+
+    while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+        double now = glfwGetTime();
+        float dt = clamp(float(now - previous), 0, .1f);
+        previous = now;
+        int width = 0, height = 0, windowWidth = 0, windowHeight = 0;
+        glfwGetFramebufferSize(window, &width, &height);
+        glfwGetWindowSize(window, &windowWidth, &windowHeight);
+        if (width <= 0 || height <= 0 || windowWidth <= 0 || windowHeight <= 0) {
+            input.clear();
+            glfwWaitEventsTimeout(.1);
+            previous = glfwGetTime();
+            statisticsStart = previous;
+            statisticsFrames = 0;
+            continue;
+        }
+        if (input.pressed[GLFW_KEY_ESCAPE]) glfwSetWindowShouldClose(window, GLFW_TRUE);
+        if (input.pressed[GLFW_KEY_TAB]) captureMouse(window, input, !input.captured);
+        renderer.beginUI(input.captured);
+        InputFrame requests = ui.build(scene, renderer.stats(), renderer.photos(), input.captured, fps, frameMs);
+        InputFrame frame = readInput(window, input, input.captured || !renderer.wantsMouse());
+        for (std::size_t i = 0; i < frame.action.size(); ++i) frame.action[i] = frame.action[i] || requests.action[i];
+        update.step(scene, frame, dt);
+        if (frame.pressed(Action::Home) || frame.pressed(Action::Focus)) input.firstMouse = true;
+        if (previousVsync != scene.settings.vsync) {
+            glfwSwapInterval(scene.settings.vsync ? 1 : 0);
+            previousVsync = scene.settings.vsync;
+        }
+        renderer.render(scene, width, height);
+        if (input.click && !input.captured && !renderer.wantsMouse()) {
+            double x = 0, y = 0;
+            glfwGetCursorPos(window, &x, &y);
+            int px = int(x * double(width) / windowWidth);
+            int py = height - 1 - int(y * double(height) / windowHeight);
+            int fish = renderer.pick(scene, px, py);
+            if (fish >= 0) update.selectFish(scene, fish);
+            else captureMouse(window, input, true);
         }
         renderer.endUI();
-        if(input.pressed[GLFW_KEY_F12]) {
-            auto stamp=std::chrono::system_clock::now().time_since_epoch().count();
-            auto path=std::filesystem::path("screenshots")/("reef_"+std::to_string(stamp)+".bmp");renderer.screenshot(path);std::cout<<"Saved "<<path<<'\n';
+        if (input.pressed[GLFW_KEY_F12]) {
+            auto path = folder / "screenshots" / ("reef_" + std::to_string(std::time(nullptr)) + "_" + std::to_string(screenshotIndex++) + ".bmp");
+            if (renderer.screenshot(path)) std::cout << "Saved screenshot: " << path << '\n';
         }
-        if(!o.captureDir.empty()&&frame%o.captureEvery==0){std::ostringstream file;file<<"frame_"<<std::setw(5)<<std::setfill('0')<<frame<<".bmp";renderer.screenshot(std::filesystem::path(o.captureDir)/file.str());}
-        if(o.frames>0&&frame==o.frames-1&&!o.capture.empty())renderer.screenshot(o.capture);
-        if(o.checkGL)Renderer::checkErrors();
-        glfwSwapBuffers(window);input.clear();++frame;++statsFrames;
-        double elapsed=glfwGetTime()-statsStart;
-        if(elapsed>=.5){fps=float(statsFrames/elapsed);ms=1000/fps;statsFrames=0;statsStart=glfwGetTime();}
-        if(o.frames>0&&frame>=o.frames)break;
+        if (input.pressed[GLFW_KEY_F9] && fps > 0)
+            recordPerformance(folder / "benchmarks", scene, renderer.stats(), fps, width, height);
+        if (!Renderer::checkErrors()) return 1;
+        glfwSwapBuffers(window);
+        input.clear();
+        ++statisticsFrames;
+        double elapsed = glfwGetTime() - statisticsStart;
+        if (elapsed >= 1) {
+            fps = float(statisticsFrames / elapsed);
+            frameMs = 1000 / fps;
+            statisticsFrames = 0;
+            statisticsStart = glfwGetTime();
+        }
     }
-    auto stats=renderer.stats();
-    std::cout<<"Frames: "<<frame<<" | elapsed wall seconds: "<<glfwGetTime()-runStart
-        <<" | last frame draws: "<<stats.draws<<" | triangles: "<<stats.triangles<<" | loaded chunks: "<<scene.chunks.size()<<'\n';
     return 0;
 }
-}
-int main(int argc,char** argv) {
-    try {
-        for(int i=1;i<argc;++i)if(std::string(argv[i])=="--help"){help();return 0;}
-        auto options=parse(argc,argv);Window window(options.width,options.height);help();return run(window.handle,options,argv[0]);
-    } catch(const std::exception& e){std::cerr<<"\nLUMINOUS REEF ERROR: "<<e.what()<<'\n';return 1;}
+
+int main() {
+    // No command-line configuration flags. Defaults live in Scene.hpp; comparison controls are in ImGui.
+    glfwSetErrorCallback([](int code, const char* message) {
+        std::cerr << "GLFW ERROR " << code << ": " << message << '\n';
+    });
+    if (!glfwInit()) return 1;
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_SAMPLES, 0);
+    GLFWwindow* window = glfwCreateWindow(1280, 720, ProjectTitle, nullptr, nullptr);
+    if (!window) { glfwTerminate(); return 1; }
+    glfwMakeContextCurrent(window);
+    if (!gladLoadGL(reinterpret_cast<GLADloadfunc>(glfwGetProcAddress))) {
+        std::cerr << "ERROR: GLAD failed to load OpenGL 3.3 functions\n";
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return 1;
+    }
+    glfwSetWindowSizeLimits(window, 960, 600, GLFW_DONT_CARE, GLFW_DONT_CARE);
+    std::cout << "Luminous Reef - Windows x64 Debug\nGPU: " << glGetString(GL_RENDERER)
+              << "\nOpenGL: " << glGetString(GL_VERSION) << '\n';
+    auto folder = executableFolder();
+    int result = 1;
+    if (folder.empty()) std::cerr << "ERROR: cannot locate the executable directory\n";
+    else result = run(window, folder); // GPU resources are destroyed before the context below.
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return result;
 }

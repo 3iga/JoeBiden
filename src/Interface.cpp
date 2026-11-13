@@ -1,6 +1,7 @@
 #include "Interface.hpp"
 #include <imgui.h>
 #include <algorithm>
+#include "ProjectInfo.hpp"
 
 void Ui::fieldGuide(Scene& scene,const std::array<PhotoView,SpeciesCount>& photos) {
     if(!scene.showFishInfo||scene.guideSpecies<0||scene.guideSpecies>=SpeciesCount)return;
@@ -17,12 +18,12 @@ void Ui::fieldGuide(Scene& scene,const std::array<PhotoView,SpeciesCount>& photo
             ImGui::Image(static_cast<ImTextureID>(photo.textureId),{w,h});
             ImGui::TextDisabled("Real photograph / Wikimedia Commons");
         } else {
-            ImGui::TextWrapped("Real photo is not installed. Run setup_photos.bat, then restart the program.");
+            ImGui::TextWrapped("Real photo is not installed. Run setup_assets.bat, then restart the program.");
             if(!photo.error.empty())ImGui::TextDisabled("%s",photo.error.c_str());
         }
         ImGui::SeparatorText("Species reference");
         ImGui::TextWrapped("%s",info.description);ImGui::Spacing();ImGui::TextWrapped("%s",info.fact);
-        ImGui::Text("Reference maximum length: %.1f cm",info.maximumLengthCm);
+        ImGui::Text("Source-reported maximum: %.1f cm",info.maximumLengthCm);
         ImGui::TextWrapped("See the cited source for measurement convention (total vs. standard length).");
         if(ImGui::Button("Copy biological source URL"))ImGui::SetClipboardText(info.source);
         if(ImGui::CollapsingHeader("Source and photo attribution")) {
@@ -47,15 +48,20 @@ void Ui::fieldGuide(Scene& scene,const std::array<PhotoView,SpeciesCount>& photo
 InputFrame Ui::build(Scene& s,const RenderStats& stats,const std::array<PhotoView,SpeciesCount>& photos,bool captured,float fps,float ms) {
     InputFrame request;if(!s.settings.ui)return request;
     auto& settings=s.settings;auto display=ImGui::GetIO().DisplaySize;
-    ImGui::SetNextWindowPos({18,18},ImGuiCond_Always);ImGui::SetNextWindowBgAlpha(.86f);
+    ImGui::SetNextWindowPos({18,18},ImGuiCond_Always);
+    ImGui::SetNextWindowSize({360,0},ImGuiCond_Always);ImGui::SetNextWindowBgAlpha(.86f);
     const ImGuiWindowFlags hud=ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoFocusOnAppearing|ImGuiWindowFlags_NoNav;
     if(ImGui::Begin("Dive telemetry",nullptr,hud)) {
-        ImGui::TextColored({.59f,.95f,.85f,1},"LUMINOUS REEF");
-        ImGui::TextDisabled("PROCEDURAL OCEAN / OPENGL 3.3+");
+        ImGui::TextColored({.59f,.95f,.85f,1}, "%s", ProjectTitle);
+        ImGui::TextWrapped("%s", TeamNames);
+        ImGui::TextDisabled("%s", ProjectTechnique);
+        ImGui::Text("Caustics [C]: %s | Pause [P]: %s", settings.caustics ? "ON" : "OFF", settings.paused ? "ON" : "OFF");
         ImGui::Separator();ImGui::Text("%.0f FPS  |  %.1f ms",fps,ms);
         ImGui::Text("Drawn: %d corals / %d fish",stats.corals,stats.fish);
         ImGui::Text("%d draws / %dK triangles",stats.draws,stats.triangles/1000);
         ImGui::TextDisabled("World X %.1f / Z %.1f",s.worldX(),s.worldZ());
+        ImGui::Text("Survey: %d / %d | %.0f s", s.discoveries(), SpeciesCount, s.survey.remaining);
+        ImGui::TextDisabled("F1 help | F5 reset survey | F9 record FPS");
         ImGui::TextColored({.97f,.82f,.45f,1},"%s",captured?"DIVE MODE - TAB releases the cursor":"CLICK A FISH TO INSPECT IT");
     }
     ImGui::End();
@@ -63,11 +69,35 @@ InputFrame Ui::build(Scene& s,const RenderStats& stats,const std::array<PhotoVie
     ImGui::SetNextWindowSize({340,std::max(390.0f,display.y-80)},ImGuiCond_FirstUseEver);
     if(ImGui::Begin("Reef controls")) {
         if(ImGui::BeginTabBar("Controls")) {
+            if (ImGui::BeginTabItem("Dive")) {
+                ImGui::SeparatorText("Reef survey");
+                ImGui::TextWrapped("Goal: scan all eight living reef species in three minutes. Press Tab to release the mouse, then click visible fish. The world stays explorable after the timer ends.");
+                if (s.survey.state == SurveyState::Ready) {
+                    if (ImGui::Button("Start survey [Enter]")) request.press(Action::StartSurvey);
+                } else if (s.survey.state == SurveyState::Active) {
+                    ImGui::Text("Time remaining: %.0f seconds", s.survey.remaining);
+                    ImGui::ProgressBar(float(s.discoveries()) / SpeciesCount);
+                } else {
+                    ImGui::TextColored({1, .8f, .3f, 1}, "%s", s.survey.state == SurveyState::Complete ? "Survey complete!" : "Time is up. Try again.");
+                    if (ImGui::Button("Start again [Enter]")) request.press(Action::StartSurvey);
+                }
+                if (ImGui::Button("Reset survey [F5]")) request.press(Action::RestartSurvey);
+                ImGui::TextWrapped("Use P to pause, F2 for a coral close-up, and C to compare caustics. Scans count only during an active survey.");
+                ImGui::SeparatorText("Experimental encounter");
+                ImGui::TextWrapped("Megalodon is extinct. This optional animal is a fictional, stylized reconstruction, not a living reef species.");
+                ImGui::TextWrapped("Natural chance: about 0.01%% per unpaused minute (mean wait 10,000 minutes). A manual spawn does not increase the survey score.");
+                if (ImGui::Button("Spawn Megalodon")) request.press(Action::SpawnMegalodon);
+                ImGui::SameLine();
+                if (ImGui::Button("Remove")) request.press(Action::DismissMegalodon);
+                if (s.megalodon.active) ImGui::Text("Encounter: %s", s.megalodon.manuallySpawned ? "manual" : "natural");
+                ImGui::EndTabItem();
+            }
             if(ImGui::BeginTabItem("Light")) {
                 ImGui::SeparatorText("Day and night");
                 ImGui::Checkbox("Automatic day-night cycle",&settings.dayCycle);
                 ImGui::SliderFloat("Hour",&settings.hour,0,23.99f,"%.2f");
                 ImGui::SliderFloat("Day length (s)",&settings.daySeconds,20,600,"%.0f");
+                ImGui::SliderFloat("Light azimuth", &settings.lightAzimuth, -180, 180, "%.0f degrees");
                 if(ImGui::Button("Noon"))settings.hour=12;
                 ImGui::SameLine();
                 if(ImGui::Button("Dusk"))settings.hour=18;
@@ -84,7 +114,7 @@ InputFrame Ui::build(Scene& s,const RenderStats& stats,const std::array<PhotoVie
                 ImGui::Checkbox("Bubbles",&settings.bubbles);ImGui::EndTabItem();
             }
             if(ImGui::BeginTabItem("World")) {
-                ImGui::InputScalar("Seed",ImGuiDataType_U32,&settings.seed);
+                ImGui::Text("Seed: %u", settings.seed);
                 if(ImGui::Button("New reef [R]"))request.press(Action::NewSeed);
                 const char* qualities[]={"Low","Medium","High"};ImGui::Combo("Density",&settings.quality,qualities,3);
                 ImGui::Text("Loaded chunks: %d",int(s.chunks.size()));ImGui::Text("Pending generation: %d",s.pendingChunks);
@@ -124,17 +154,28 @@ InputFrame Ui::build(Scene& s,const RenderStats& stats,const std::array<PhotoVie
             }
             ImGui::EndTabBar();
         }
-        ImGui::Separator();if(ImGui::Button("Controls / help"))showHelp_=!showHelp_;
+        ImGui::Separator();if(ImGui::Button("Controls / help"))s.showHelp=!s.showHelp;
     }
     ImGui::End();
     fieldGuide(s,photos);
-    if(showHelp_) {
+    if(s.showHelp) {
         ImGui::SetNextWindowSize({480,330},ImGuiCond_Appearing);
-        if(ImGui::Begin("Controls and scope",&showHelp_)) {
-            ImGui::TextWrapped("WASD: swim | Space / Ctrl: up / down | Shift: faster | Tab: release mouse | Mouse wheel: FOV | Home: origin | F2: focus coral | G: camera tour | H: interface | F12: BMP capture | Esc: exit.");
+        if(ImGui::Begin("Controls and scope",&s.showHelp)) {
+            ImGui::TextWrapped("WASD: swim | Space / Ctrl: up / down | Shift: faster | Tab: release mouse | Mouse wheel: FOV | Home: origin | F2: focus coral | G: camera tour | F1: help | F5: reset survey | Enter: start | F9: FPS CSV | H: interface | F12: BMP capture | Esc: exit.");
             ImGui::Separator();ImGui::TextWrapped("Pause freezes fish, the clock and animated effects. The camera and streaming remain responsive.");
             ImGui::TextWrapped("This is a graphics simulation, not a marine biology or fluid-physics model. Fish steering uses random targets, separation, limited grouping and obstacle repulsion.");
             ImGui::TextWrapped("The performance overlay measures the complete frame, not GPU time. Capture runs are not real-time benchmarks.");
+        }
+        ImGui::End();
+    }
+    if (s.showMegalodonInfo) {
+        ImGui::SetNextWindowSize({430, 260}, ImGuiCond_Appearing);
+        if (ImGui::Begin("Experimental Megalodon", &s.showMegalodonInfo)) {
+            ImGui::Text("Otodus megalodon (extinct)");
+            ImGui::Separator();
+            ImGui::TextWrapped("This is a fictional encounter in the modern reef. Its 3D shape, mass, scale and movement are artistic simulation choices, not fossil measurements.");
+            ImGui::TextWrapped("No photograph of a living Megalodon exists. The field-guide requirement for real animal photos applies to the eight living reef species, not this optional extinct animal.");
+            if (ImGui::Button("Copy museum source")) ImGui::SetClipboardText("https://australian.museum/learn/animals/fishes/otodus-megalodon/");
         }
         ImGui::End();
     }
