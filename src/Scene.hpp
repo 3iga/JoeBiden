@@ -43,10 +43,26 @@ Vec3 position{-1.8f, .32f, -2.6f}, rotation{}, size{1.15f, 1.15f, 1.15f};
 Mat4 matrix() const {return compose(position, rotation, size);
 }
 };
-enum class ObjectKind { Coral, Rock, Kelp };
+enum class ObjectKind { Coral, Rock, Kelp, Rockslide, Structure, Seagrass, Debris };
+enum class StructureVariant { Ruin, CargoShip, OceanLiner, AircraftCarrier, Aircraft, LexingtonCarrier, Submarine, FishingBoat };
+constexpr int StructureVariantCount=8;
+constexpr std::uint32_t StructurePickBase=0x40000000u;
+struct StructureInfo {
+const char* name;
+const char* className;
+const char* sinking;
+const char* site;
+const char* discovery;
+const char* depth;
+const char* context;
+const char* source;
+const char* source2;
+};
+const StructureInfo& structureInfo(int variant);
 struct Object {
 ObjectKind kind=ObjectKind::Coral;
 int variant=0;
+std::uint32_t pickId=0;
 Transform transform;
 Vec4 tint{1, 1, 1, 1};
 Vec3 boundCenter{};
@@ -86,7 +102,7 @@ struct Scene {
 Settings settings;
 Survey survey;
 Megalodon megalodon;
-bool showMegalodonInfo=false, showHelp=false;
+bool showMegalodonInfo=false, showHelp=false, showStructureInfo=false;
 Camera camera;
 Transform featured;
 // Coordinates relative to original chunk (0,0).
@@ -100,6 +116,7 @@ Lighting light;
 double time=0, tourTime=0;
 std::uint64_t generation=0;
 int pendingChunks=0, selectedFish=-1;
+std::uint32_t selectedStructureId=0;
 bool showFishInfo=false;
 int guideSpecies=-1;
 double worldX() const {return double(origin.first)*ChunkSize+camera.position.x;
@@ -111,6 +128,21 @@ float floorAt(Vec3 local) const {return terrainHeight(double(origin.first)*Chunk
 int discoveries() const {int n=0;
 for (bool x:discovered) if (x)++n;
 return n;
+}
+const Object* selectedStructure() const {
+    if (!selectedStructureId)return nullptr;
+    for (const auto& item:chunks)for (const auto& object:item.second.objects)
+        if (object.kind==ObjectKind::Structure&&object.pickId==selectedStructureId)return &object;
+    return nullptr;
+}
+bool selectedStructureLocation(double& x, double& z) const {
+    for (const auto& item:chunks)for (const auto& object:item.second.objects)
+        if (object.kind==ObjectKind::Structure&&object.pickId==selectedStructureId) {
+            x=double(item.first.first)*ChunkSize+object.transform.position.x;
+            z=double(item.first.second)*ChunkSize+object.transform.position.z;
+            return true;
+        }
+    return false;
 }
 };
 Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality);

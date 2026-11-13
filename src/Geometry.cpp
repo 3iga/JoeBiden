@@ -13,6 +13,25 @@ static void append(MeshData& target, const MeshData& source, Vec3 pos, Vec3 size
     }
     for (unsigned i:source.indices)target.indices.push_back(base+i);
 }
+static void appendStoneBlock(MeshData& mesh, Vec3 center, Vec3 halfSize) {
+    const Vec3 normals[6]={{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    const Vec3 faces[6][4]={
+        {{halfSize.x, -halfSize.y, -halfSize.z}, {halfSize.x, halfSize.y, -halfSize.z}, {halfSize.x, halfSize.y, halfSize.z}, {halfSize.x, -halfSize.y, halfSize.z}},
+        {{-halfSize.x, -halfSize.y, halfSize.z}, {-halfSize.x, halfSize.y, halfSize.z}, {-halfSize.x, halfSize.y, -halfSize.z}, {-halfSize.x, -halfSize.y, -halfSize.z}},
+        {{-halfSize.x, halfSize.y, -halfSize.z}, {-halfSize.x, halfSize.y, halfSize.z}, {halfSize.x, halfSize.y, halfSize.z}, {halfSize.x, halfSize.y, -halfSize.z}},
+        {{-halfSize.x, -halfSize.y, halfSize.z}, {-halfSize.x, -halfSize.y, -halfSize.z}, {halfSize.x, -halfSize.y, -halfSize.z}, {halfSize.x, -halfSize.y, halfSize.z}},
+        {{halfSize.x, -halfSize.y, halfSize.z}, {halfSize.x, halfSize.y, halfSize.z}, {-halfSize.x, halfSize.y, halfSize.z}, {-halfSize.x, -halfSize.y, halfSize.z}},
+        {{-halfSize.x, -halfSize.y, -halfSize.z}, {-halfSize.x, halfSize.y, -halfSize.z}, {halfSize.x, halfSize.y, -halfSize.z}, {halfSize.x, -halfSize.y, -halfSize.z}}
+    };
+    const float uv[4][2]={{0, 0}, {0, 1}, {1, 1}, {1, 0}};
+    for (unsigned face=0; face<6; ++face) {
+        const unsigned base=static_cast<unsigned>(mesh.vertices.size());
+        for (unsigned corner=0; corner<4; ++corner)
+            mesh.vertices.push_back({center+faces[face][corner], normals[face], {uv[corner][0], uv[corner][1]}});
+        triangle(mesh, base, base+1, base+2);
+        triangle(mesh, base, base+2, base+3);
+    }
+}
 MeshData makeSphere(int slices, int rings) {
     MeshData m;
     for (int j=0; j<=rings; ++j) {
@@ -102,6 +121,151 @@ MeshData makeRock() {
     for (auto& v:m.vertices)v.normal=safeNormalize(v.normal);
     return m;
 }
+MeshData makeUnderwaterStructure() {
+    MeshData mesh;
+    // A broken stone gateway assembled from broad, individually eroded blocks.
+    const float sides[]={-1.0f, 1.0f};
+    for (float side:sides) {
+        const float x=side*2.15f;
+        appendStoneBlock(mesh, {x, .28f, 0}, {.82f, .28f, .82f});
+        appendStoneBlock(mesh, {x-side*.08f, .94f, 0}, {.56f, .43f, .60f});
+        appendStoneBlock(mesh, {x+side*.06f, 1.82f, .03f}, {.50f, .45f, .56f});
+        appendStoneBlock(mesh, {x-side*.05f, 2.68f, 0}, {.66f, .36f, .68f});
+    }
+    appendStoneBlock(mesh, {-1.12f, 3.27f, 0}, {1.13f, .34f, .70f});
+    appendStoneBlock(mesh, {1.75f, 3.08f, .02f}, {.74f, .32f, .67f});
+    // Fallen masonry makes the ruin look collapsed and gives it a wider seabed footprint.
+    appendStoneBlock(mesh, {.70f, .36f, 1.02f}, {1.08f, .34f, .54f});
+    appendStoneBlock(mesh, {-2.45f, .34f, -1.12f}, {.71f, .32f, .62f});
+    appendStoneBlock(mesh, {2.52f, .30f, -1.18f}, {.60f, .28f, .54f});
+    return mesh;
+}
+static void appendBrokenHull(MeshData& mesh, float length, float beam, int sections, bool splitMiddle) {
+    for (int i=0; i<sections; ++i) {
+        if (splitMiddle&&i==sections/2)continue;
+        const float t=(float(i)+.5f)/float(sections)*2.0f-1.0f;
+        const float taper=.42f+.58f*(1.0f-std::pow(std::abs(t), 1.5f));
+        const float x=-length*.5f+(float(i)+.5f)*length/float(sections);
+        const float halfLength=length/float(sections)*.54f;
+        appendStoneBlock(mesh, {x, .50f, 0}, {halfLength, .43f, beam*taper});
+    }
+}
+static MeshData makeCargoWreck() {
+    MeshData mesh;
+    appendBrokenHull(mesh, 17.0f, 1.75f, 7, true);
+    appendStoneBlock(mesh, {-2.9f, 1.13f, 0}, {2.35f, .28f, 1.43f});
+    for (int i=0; i<4; ++i) {
+        const float x=-4.7f+float(i)*2.05f;
+        appendStoneBlock(mesh, {x, 1.73f, .02f}, {.76f, .32f, .59f});
+    }
+    appendStoneBlock(mesh, {-5.3f, 2.15f, 0}, {.65f, .50f, .60f});
+    cylinder(mesh, {-5.3f, 2.5f, 0}, {-5.3f, 4.7f, 0}, .10f, .035f, 7);
+    appendStoneBlock(mesh, {1.7f, .42f, 2.1f}, {1.05f, .26f, .36f});
+    appendStoneBlock(mesh, {5.3f, .32f, -1.8f}, {.72f, .22f, .48f});
+    return mesh;
+}
+static MeshData makeLinerWreck() {
+    MeshData mesh;
+    appendBrokenHull(mesh, 23.0f, 2.65f, 9, true);
+    appendStoneBlock(mesh, {-2.0f, 1.02f, 0}, {7.7f, .23f, 2.18f});
+    for (int deck=0; deck<3; ++deck) {
+        const float y=1.42f+float(deck)*.62f;
+        appendStoneBlock(mesh, {-2.7f+float(deck)*.35f, y, 0}, {5.0f-float(deck)*.7f, .23f, 1.65f-float(deck)*.17f});
+    }
+    for (int i=0; i<4; ++i) {
+        const float x=-7.4f+float(i)*3.4f;
+        cylinder(mesh, {x, 1.9f, 0}, {x, 3.35f, 0}, .34f, .27f, 8);
+    }
+    cylinder(mesh, {7.6f, .95f, 0}, {9.2f, 2.9f, 0}, .20f, .04f, 7);
+    return mesh;
+}
+static MeshData makeCarrierWreck() {
+    MeshData mesh;
+    appendBrokenHull(mesh, 22.0f, 2.2f, 8, false);
+    appendStoneBlock(mesh, {0, 1.06f, 0}, {10.3f, .24f, 3.35f});
+    appendStoneBlock(mesh, {-3.0f, 1.55f, .5f}, {2.2f, .28f, 1.50f});
+    appendStoneBlock(mesh, {3.2f, 1.72f, -1.5f}, {.85f, .75f, .72f});
+    cylinder(mesh, {3.2f, 2.35f, -1.5f}, {3.2f, 3.6f, -1.5f}, .10f, .07f, 7);
+    appendStoneBlock(mesh, {-6.3f, .52f, 2.8f}, {1.1f, .15f, .35f});
+    appendStoneBlock(mesh, {0, .48f, -2.95f}, {2.1f, .16f, .38f});
+    return mesh;
+}
+static MeshData makeAircraftWreck() {
+    MeshData mesh;
+    appendStoneBlock(mesh, {0, .50f, 0}, {3.3f, .28f, .30f});
+    appendStoneBlock(mesh, {-.35f, .46f, 0}, {.90f, .13f, 4.9f});
+    appendStoneBlock(mesh, {-2.55f, .48f, 0}, {.65f, .12f, 1.55f});
+    appendStoneBlock(mesh, {-2.95f, .45f, 0}, {.55f, .12f, .20f});
+    appendStoneBlock(mesh, {2.0f, .43f, .23f}, {1.2f, .12f, .22f});
+    appendStoneBlock(mesh, {1.9f, .42f, -1.8f}, {.68f, .10f, .20f});
+    cylinder(mesh, {3.15f, .5f, 0}, {3.55f, .5f, 0}, .06f, .02f, 7);
+    return mesh;
+}
+static MeshData makeSubmarineWreck() {
+    MeshData mesh;
+    cylinder(mesh, {-6.0f, .75f, 0}, {5.5f, .75f, 0}, .83f, .55f, 14);
+    appendStoneBlock(mesh, {.3f, 1.48f, 0}, {1.0f, .55f, .56f});
+    cylinder(mesh, {.3f, 1.95f, 0}, {.3f, 2.65f, 0}, .08f, .04f, 7);
+    appendStoneBlock(mesh, {-5.8f, .72f, 0}, {.52f, .16f, 1.25f});
+    appendStoneBlock(mesh, {5.05f, .78f, 0}, {.45f, .15f, 1.05f});
+    return mesh;
+}
+static MeshData makeFishingBoatWreck() {
+    MeshData mesh;
+    appendBrokenHull(mesh, 8.5f, 1.12f, 5, false);
+    appendStoneBlock(mesh, {-1.8f, 1.02f, 0}, {1.65f, .48f, .87f});
+    appendStoneBlock(mesh, {1.8f, .91f, 0}, {1.4f, .26f, .90f});
+    cylinder(mesh, {-1.9f, 1.4f, 0}, {-1.9f, 3.4f, 0}, .07f, .02f, 7);
+    appendStoneBlock(mesh, {3.2f, .38f, .95f}, {.78f, .18f, .22f});
+    return mesh;
+}
+MeshData makeStructure(int variant) {
+    switch (variant) {
+    case 1:return makeCargoWreck();
+    case 2:return makeLinerWreck();
+    case 3:return makeCarrierWreck();
+    case 4:return makeAircraftWreck();
+    case 5:return makeCarrierWreck();
+    case 6:return makeSubmarineWreck();
+    case 7:return makeFishingBoatWreck();
+    default:return makeUnderwaterStructure();
+    }
+}
+MeshData makeDebris(int variant) {
+    MeshData mesh;
+    switch (variant) {
+    case 0:
+        cylinder(mesh, {0, 0, 0}, {0, .54f, 0}, .22f, .22f, 10);
+        cylinder(mesh, {0, .54f, 0}, {0, .57f, 0}, .18f, .18f, 10);
+        break;
+    case 1:
+        cylinder(mesh, {0, 0, 0}, {0, .40f, 0}, .14f, .13f, 9);
+        cylinder(mesh, {0, .38f, 0}, {0, .62f, 0}, .08f, .06f, 8);
+        break;
+    case 2:
+        appendStoneBlock(mesh, {0, .30f, 0}, {.38f, .30f, .38f});
+        appendStoneBlock(mesh, {0, .30f, .39f}, {.39f, .035f, .035f});
+        appendStoneBlock(mesh, {0, .30f, -.39f}, {.39f, .035f, .035f});
+        break;
+    case 3: {
+        MeshData ring=makeRing();
+        append(mesh, ring, {0, 0, 0}, Vec3(.56f));
+        break;
+    }
+    default:
+        for (int i=0; i<9; ++i) {
+            Vec3 p{-1.0f, .04f+float(i%3)*.03f, -1.0f+float(i)*.25f};
+            Vec3 q{1.0f, .04f+float((i+1)%3)*.03f, 1.0f-float(i)*.25f};
+            cylinder(mesh, p, q, .018f, .018f, 4);
+        }
+        for (int i=0; i<9; ++i) {
+            const float z=-1.0f+float(i)*.25f;
+            cylinder(mesh, {-1.0f, .08f, z}, {1.0f, .08f, z}, .014f, .014f, 4);
+        }
+        break;
+    }
+    return mesh;
+}
 MeshData makeKelp() {
     MeshData m;
     m.twoSided = true;
@@ -120,6 +284,33 @@ MeshData makeKelp() {
         }
         for (int j=0; j<12; ++j) {
             unsigned a=base+unsigned(j*2);
+            triangle(m, a, a+1, a+2);
+            triangle(m, a+1, a+3, a+2);
+        }
+    }
+    return m;
+}
+MeshData makeSeagrass() {
+    MeshData m;
+    m.twoSided=true;
+    constexpr int Steps=7, Blades=22;
+    for (int blade=0; blade<Blades; ++blade) {
+        const float angle=float(blade)*2.399963f;
+        const Vec3 forward{std::cos(angle), 0, std::sin(angle)};
+        const Vec3 side{-forward.z, 0, forward.x};
+        const float height=.38f+.62f*float((blade*7)%Blades)/float(Blades);
+        const float width=.028f+.018f*float(blade%4)/3.0f;
+        const unsigned base=static_cast<unsigned>(m.vertices.size());
+        for (int step=0; step<=Steps; ++step) {
+            const float t=float(step)/Steps;
+            const Vec3 center=forward*(.34f*t*t)+Vec3(.09f*std::sin(t*Pi+angle), height*t, .09f*std::cos(t*Pi+angle));
+            const float w=width*(1.0f-t)+.003f;
+            const Vec3 normal=safeNormalize(cross(forward, Vec3(0, 1, 0)));
+            m.vertices.push_back({center-side*w, normal, {0, t}});
+            m.vertices.push_back({center+side*w, normal, {1, t}});
+        }
+        for (int step=0; step<Steps; ++step) {
+            const unsigned a=base+unsigned(step*2);
             triangle(m, a, a+1, a+2);
             triangle(m, a+1, a+3, a+2);
         }
@@ -284,7 +475,7 @@ MeshData makeRuffledCoral(std::uint32_t seed) {
         for (int ring=0; ring<=R; ++ring)for (int j=0; j<=S; ++j) {
             float f=float(ring)/R, a=float(j)*2*Pi/S;
             float r=radius*f*(1+.11f*std::sin(a*7+phase)*f+.035f*std::sin(a*15-phase));
-            float y=.28f+plate*.36f+.24f*f*f+std::pow(f, 3)*.10f*std::sin(a*8+phase);
+            float y=.28f+plate*.36f+.24f*f*f+std::pow(f, 3.0f)*.10f*std::sin(a*8+phase);
             m.vertices.push_back({{r*std::cos(a), y, r*std::sin(a)}, {0, 1, 0}, {f*std::cos(a)*.5f+.5f, f*std::sin(a)*.5f+.5f}});
         }
         for (int ring=0; ring<R; ++ring)for (int j=0; j<S; ++j) {

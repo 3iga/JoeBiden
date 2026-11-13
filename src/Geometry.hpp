@@ -5,7 +5,11 @@
 MeshData makeSphere(int slices=24, int rings=16);
 MeshData makeTubeCoral(std::uint32_t seed=93);
 MeshData makeRock();
+MeshData makeUnderwaterStructure();
+MeshData makeStructure(int variant);
+MeshData makeDebris(int variant);
 MeshData makeKelp();
+MeshData makeSeagrass();
 MeshData makeTail();
 MeshData makeFin();
 MeshData makeRing();

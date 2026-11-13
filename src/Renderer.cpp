@@ -22,9 +22,11 @@ static MeshData streamerMesh() {
 }
 Renderer::Renderer(const std::filesystem::path& p, const std::filesystem::path& assets)
 :shader_(p/"reef.vert", p/"reef.frag"), background_(p/"background.vert", p/"background.frag"),
-bubbleShader_(p/"bubbles.vert", p/"bubbles.frag"), pickShader_(p/"reef.vert", p/"pick.frag"),
-rock_(makeRock()), kelp_(makeKelp()), sphere_(makeSphere(18, 12)), tail_(makeTail()), fin_(makeFin()), ring_(makeRing()), streamer_(streamerMesh()), sharkBody_(makeSharkBody()), sharkTail_(makeSharkTail()) {
+    bubbleShader_(p/"bubbles.vert", p/"bubbles.frag"), pickShader_(p/"reef.vert", p/"pick.frag"),
+rock_(makeRock()), kelp_(makeKelp()), seagrass_(makeSeagrass()), sphere_(makeSphere(18, 12)), tail_(makeTail()), fin_(makeFin()), ring_(makeRing()), streamer_(streamerMesh()), sharkBody_(makeSharkBody()), sharkTail_(makeSharkTail()) {
     for (int i=0; i<CoralVariants; ++i)coral_[std::size_t(i)]=std::make_unique<Mesh>(makeCoralVariant(i));
+    for (int i=0; i<StructureVariantCount; ++i)structures_[std::size_t(i)]=std::make_unique<Mesh>(makeStructure(i));
+    for (int i=0; i<int(debris_.size()); ++i)debris_[std::size_t(i)]=std::make_unique<Mesh>(makeDebris(i));
     makeMaterial(sandMat_, 0);
     sandMat_.uvScale=1;
     makeMaterial(coralMat_, 1);
@@ -205,10 +207,11 @@ void Renderer::drawGeometry(const Scene& s, bool picking) {
         return sphereInRange(p, radius, s.camera.position, range)&&frustum.containsSphere(p, radius);
     };
     std::array<std::vector<Instance>, CoralVariants> corals;
-    std::vector<Instance> rocks, kelp;
+    std::array<std::vector<Instance>, 5> debris;
+    std::vector<Instance> rocks, kelp, seagrass;
     for (const auto& item:s.chunks) {
         Vec3 offset=chunkOffset(item.first, s.origin);
-        if (!visible(offset, 23.0f)) {
+        if (!visible(offset, 210.0f)) {
             stats_.objectsCulled+=int(item.second.objects.size())+1;
             continue;
         }
@@ -227,13 +230,22 @@ void Renderer::drawGeometry(const Scene& s, bool picking) {
                 corals[std::size_t(o.variant)].push_back(inst);
                 ++stats_.corals;
             }
-            else if (o.kind==ObjectKind::Rock)rocks.push_back(inst);
-            else kelp.push_back(inst);
+            else if (o.kind==ObjectKind::Rock||o.kind==ObjectKind::Rockslide)rocks.push_back(inst);
+            else if (o.kind==ObjectKind::Kelp)kelp.push_back(inst);
+            else if (o.kind==ObjectKind::Seagrass)seagrass.push_back(inst);
+            else if (o.kind==ObjectKind::Debris)debris[std::size_t(std::max(0, std::min(o.variant, 4)))].push_back(inst);
+            else {
+                const int type=std::max(0, std::min(o.variant, StructureVariantCount-1));
+                const int pickId=picking?static_cast<int>(o.pickId):0;
+                draw(shader, *structures_[std::size_t(type)], rockMat_, inst.model, inst.tint, -1, 0, 0, pickId);
+            }
         }
     }
     batch(shader, rock_, rockMat_, rocks);
+    for (int i=0; i<int(debris_.size()); ++i)batch(shader, *debris_[std::size_t(i)], rockMat_, debris[std::size_t(i)]);
     for (int i=0; i<CoralVariants; ++i)batch(shader, *coral_[std::size_t(i)], coralMat_, corals[std::size_t(i)]);
     batch(shader, kelp_, leafMat_, kelp, 1);
+    batch(shader, seagrass_, leafMat_, seagrass, 1);
     Vec3 originOffset=chunkOffset({0, 0}, s.origin), featured=originOffset+s.featured.position;
     if (visible(featured+Vec3(0, 1.4f*s.featured.size.y, 0), 2.8f*std::max({s.featured.size.x, s.featured.size.y, s.featured.size.z}))) {
         Vec3 base=featured;
@@ -367,6 +379,7 @@ int Renderer::pick(const Scene& s, int x, int y) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glReadBuffer(GL_BACK);
     stats_=saved;
+    if (id>=StructurePickBase)return static_cast<int>(id);
     return id > 0 && id <= s.fish.size() + (s.megalodon.active ? 1u : 0u) ? int(id) - 1 : -1;
 }
 bool Renderer::screenshot(const std::filesystem::path& path) const {return saveScreenshot(path, width_, height_);
