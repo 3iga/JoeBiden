@@ -13,7 +13,6 @@ struct PhotoView {
     std::string credit,error;
 };
 struct Ui {
-    bool showHelp_=false;
     void fieldGuide(Scene& scene,const std::array<PhotoView,SpeciesCount>& photos);
 public:
     InputFrame build(Scene& scene,const RenderStats& stats,const std::array<PhotoView,SpeciesCount>& photos,

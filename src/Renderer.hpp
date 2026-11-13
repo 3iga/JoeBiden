@@ -48,7 +48,7 @@ public:
     static bool checkErrors();
     bool valid() const;
     bool initializeUI(GLFWwindow* window,float scale=1);
-    void beginUI();
+    void beginUI(bool captured=false);
     void endUI();
     bool wantsMouse() const;
 };
