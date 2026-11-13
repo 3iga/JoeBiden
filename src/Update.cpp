@@ -10,6 +10,7 @@ void Update::resetCoral(Scene& s) {
 void Update::initialize(Scene& s) {s.camera.reset();resetCoral(s);regenerate(s);s.light=lighting(s.settings.hour);}
 void Update::regenerate(Scene& s) {
     s.chunks.clear();++s.generation;s.selectedFish=-1;s.showFishInfo=false;
+    s.megalodon = {}; s.showMegalodonInfo = false;
     lastSeed_=s.settings.seed;lastQuality_=s.settings.quality;random_=Random(s.settings.seed+71);
     const int counts[]={24,40,56};s.fish.resize(counts[std::max(0,std::min(s.settings.quality,2))]);
     for(int i=0;i<int(s.fish.size());++i)spawnFish(s,i,true);
@@ -29,6 +30,10 @@ void Update::rebase(Scene& s) {
     s.origin.first+=dx;s.origin.second+=dz;s.camera.position=s.camera.position-shift;
     for(auto& f:s.fish){f.position=f.position-shift;f.target=f.target-shift;f.home=f.home-shift;}
     for(auto& b:s.bubbles){b.x-=shift.x;b.z-=shift.z;}
+    if (s.megalodon.active) {
+        s.megalodon.position -= shift;
+        s.megalodon.target -= shift;
+    }
 }
 void Update::stream(Scene& s,int budget) {
     const auto cx=s.origin.first+static_cast<std::int64_t>(std::floor((double(s.camera.position.x)+12)/ChunkSize));
@@ -48,15 +53,20 @@ void Update::stream(Scene& s,int budget) {
     s.pendingChunks=int(missing.size())-n;
 }
 Lighting Update::lighting(float hour) {
-    float a=(hour-6)*2*Pi/24,sun=std::sin(a),day=smooth01(-.16f,.25f,sun);
-    Lighting l;l.daylight=day;
-    Vec3 solar=safeNormalize({std::cos(a)*.65f,sun,std::sin(a*.5f)*.38f+.3f});
-    l.direction=day>.1f?safeNormalize({solar.x,std::max(solar.y,.09f),solar.z}):safeNormalize(Vec3(-solar.x,.55f,-solar.z));
-    float dusk=1-smooth01(.05f,.5f,sun);
-    l.ambient=mix({.018f,.035f,.07f},{.29f,.40f,.43f},day);
-    l.color=mix({.10f,.16f,.32f},mix({1,.94f,.80f},{1,.50f,.24f},dusk*.6f),day);
-    l.fogColor=mix({.006f,.019f,.044f},{.035f,.25f,.285f},day);
-    return l;
+    const float angle = (hour - 6.0f) * 2.0f * Pi / 24.0f;
+    const float elevation = std::sin(angle);
+    const float day = smooth01(-.20f, .24f, elevation);
+    const float twilight = 1.0f - smooth01(.03f, .55f, std::abs(elevation));
+    Lighting light;
+    light.daylight = day;
+    Vec3 sun = safeNormalize(Vec3(std::cos(angle) * .7f, std::max(.08f, elevation), .35f));
+    Vec3 moon = safeNormalize(Vec3(-std::cos(angle) * .7f, std::max(.08f, -elevation), -.35f));
+    light.direction = safeNormalize(mix(moon, sun, day));
+    light.ambient = mix(Vec3(.018f, .035f, .07f), Vec3(.29f, .40f, .43f), day);
+    Vec3 daylight = mix(Vec3(1, .94f, .80f), Vec3(1, .46f, .22f), twilight * .65f);
+    light.color = mix(Vec3(.10f, .16f, .32f), daylight, day);
+    light.fogColor = mix(Vec3(.006f, .019f, .044f), Vec3(.035f, .25f, .285f), day);
+    return light;
 }
 void Update::spawnFish(Scene& s,int index,bool nearStart) {
     Fish f;f.species=index%SpeciesCount;const auto& species=SpeciesList[std::size_t(f.species)];
@@ -140,13 +150,25 @@ void Update::animateBubbles(Scene& s,float dt) {
     }
 }
 void Update::selectFish(Scene& s,int index) {
+    if (index == int(s.fish.size()) && s.megalodon.active) {
+        s.showMegalodonInfo = true;
+        s.selectedFish = -1;
+        return;
+    }
     if(index<0||index>=int(s.fish.size())){s.selectedFish=-1;return;}
     s.selectedFish=index;int species=s.fish[std::size_t(index)].species;
-    s.discovered[std::size_t(species)]=true;s.guideSpecies=species;s.showFishInfo=true;s.settings.tour=false;
+    if (s.survey.state == SurveyState::Active) s.discovered[std::size_t(species)] = true;
+    s.guideSpecies=species;s.showFishInfo=true;s.settings.tour=false;
+    if (s.survey.state == SurveyState::Active && s.discoveries() == SpeciesCount)
+        s.survey.state = SurveyState::Complete;
 }
 void Update::step(Scene& s,const InputFrame& in,float dt) {
     dt=std::isfinite(dt)?clamp(dt,0,.25f):0;
     auto& o=s.settings;
+    if (in.pressed(Action::StartSurvey)) startSurvey(s);
+    if (in.pressed(Action::RestartSurvey)) resetSurvey(s);
+    if (in.pressed(Action::Help)) { s.showHelp = !s.showHelp; o.ui = true; }
+    if (in.pressed(Action::DismissMegalodon)) { s.megalodon.active=false; s.showMegalodonInfo=false; }
     o.quality=std::max(0,std::min(o.quality,2));o.visibility=clamp(o.visibility,24,96);
     o.fogStart=clamp(o.fogStart,0,o.visibility-3);o.daySeconds=clamp(o.daySeconds,20,1800);
     o.fishSpeed=clamp(o.fishSpeed,.05f,3);o.swimSpeed=clamp(o.swimSpeed,1,20);
@@ -178,6 +200,7 @@ void Update::step(Scene& s,const InputFrame& in,float dt) {
         if(o.tour)s.tourTime+=dt;
     }
     o.hour=std::fmod(std::max(o.hour,0.0f),24.0f);s.light=lighting(o.hour);
+    s.light.direction = Vec3(rotateY(radians(o.lightAzimuth)) * Vec4(s.light.direction, 0));
     if(o.tour) {
         // Deliberately scripted camera tour; fish motion is independent steering.
         if(s.origin!=ChunkKey{0,0}) {returnHome(s,false);o.tour=true;}
@@ -187,5 +210,70 @@ void Update::step(Scene& s,const InputFrame& in,float dt) {
     }
     rebase(s);s.camera.position.y=std::max(s.camera.position.y,s.floorAt(s.camera.position)+.65f);
     stream(s,3);
-    if(!o.paused){animateFish(s,dt);animateBubbles(s,dt);}
+    if (in.pressed(Action::SpawnMegalodon)) spawnMegalodon(s, true);
+    if(!o.paused) {
+        animateFish(s,dt);
+        animateBubbles(s,dt);
+        animateMegalodon(s,dt);
+        if (s.survey.state == SurveyState::Active) {
+            s.survey.remaining = std::max(0.0f, s.survey.remaining - dt);
+            if (s.survey.remaining == 0) s.survey.state = SurveyState::TimeUp;
+        }
+    }
+}
+
+void Update::startSurvey(Scene& s) {
+    if (s.survey.state == SurveyState::Active) return;
+    s.discovered.fill(false);
+    s.survey = {SurveyState::Active, 180.0f};
+    s.settings.paused = false;
+}
+void Update::resetSurvey(Scene& s) {
+    s.discovered.fill(false);
+    s.survey = {};
+    s.selectedFish = -1;
+    s.showFishInfo = false;
+    returnHome(s, false);
+}
+double Update::encounterProbability(double seconds) {
+    // A Poisson event: mean waiting time 10,000 unpaused minutes, NOT one roll/frame.
+    return seconds > 0 ? -std::expm1(-seconds / 600000.0) : 0.0;
+}
+void Update::spawnMegalodon(Scene& s, bool manual) {
+    Megalodon& shark = s.megalodon;
+    shark = {};
+    shark.active = true;
+    shark.manuallySpawned = manual;
+    Vec3 forward = safeNormalize(Vec3(s.camera.forward().x, 0, s.camera.forward().z));
+    Vec3 right = s.camera.right();
+    shark.position = s.camera.position + forward * 18.0f - right * 7.0f + Vec3(0, 2, 0);
+    shark.position.y = std::max(shark.position.y, s.floorAt(shark.position) + 5.0f);
+    shark.target = s.camera.position + forward * 18.0f + right * 22.0f + Vec3(0, 2, 0);
+    shark.velocity = right * 3.0f;
+    shark.yaw = std::atan2(-shark.velocity.z, shark.velocity.x);
+}
+void Update::animateMegalodon(Scene& s, float dt) {
+    auto& shark = s.megalodon;
+    if (!shark.active) {
+        if (double(encounterRandom_.unit()) < encounterProbability(dt)) spawnMegalodon(s, false);
+        return;
+    }
+    shark.age += dt;
+    if (shark.age >= 90.0f || length(shark.position - s.camera.position) > s.settings.visibility + 40) {
+        shark.active = false;
+        return;
+    }
+    if (length(shark.target - shark.position) < 4.0f) {
+        float angle = encounterRandom_.range(0, 2 * Pi);
+        shark.target = s.camera.position + Vec3(std::cos(angle) * 22, 3, std::sin(angle) * 22);
+        shark.target.y = std::max(shark.target.y, s.floorAt(shark.target) + 5);
+    }
+    Vec3 direction = safeNormalize(shark.target - shark.position);
+    float bottom = s.floorAt(shark.position) + 4;
+    if (shark.position.y < bottom) direction.y += bottom - shark.position.y;
+    shark.velocity = mix(shark.velocity, safeNormalize(direction) * 3.0f, 1 - std::exp(-.45f * dt));
+    shark.position += shark.velocity * dt;
+    shark.yaw = std::atan2(-shark.velocity.z, shark.velocity.x);
+    shark.pitch = std::atan2(shark.velocity.y, std::sqrt(shark.velocity.x * shark.velocity.x + shark.velocity.z * shark.velocity.z));
+    shark.tailAngle = std::sin(shark.age * 2.5f) * .25f;
 }

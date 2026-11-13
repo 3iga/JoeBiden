@@ -77,7 +77,17 @@ void Shader::set(const std::string& n,Vec2 x) const { glUniform2f(location(n),x.
 void Shader::set(const std::string& n,Vec3 x) const { glUniform3f(location(n),x.x,x.y,x.z); }
 void Shader::set(const std::string& n,Vec4 x) const { glUniform4f(location(n),x.x,x.y,x.z,x.w); }
 void Shader::set(const std::string& n,const Mat4& x) const { glUniformMatrix4fv(location(n),1,GL_FALSE,glm::value_ptr(x)); }
-Mesh::Mesh(const MeshData& data) {
+Mesh::Mesh(const MeshData& source) {
+    // Consistent CCW winding for outward vertex normals. Thin leaves remain two-sided.
+    MeshData data = source;
+    twoSided = source.twoSided;
+    for (std::size_t i = 0; i + 2 < data.indices.size(); i += 3) {
+        const Vertex& a = data.vertices[data.indices[i]];
+        const Vertex& b = data.vertices[data.indices[i + 1]];
+        const Vertex& c = data.vertices[data.indices[i + 2]];
+        if (dot(cross(b.position - a.position, c.position - a.position), a.normal + b.normal + c.normal) < 0)
+            std::swap(data.indices[i + 1], data.indices[i + 2]);
+    }
     indexCount=static_cast<GLsizei>(data.indices.size());
     glGenVertexArrays(1,&vao);glGenBuffers(1,&vbo);glGenBuffers(1,&ebo);glGenBuffers(1,&instanceBuffer);
     glBindVertexArray(vao);glBindBuffer(GL_ARRAY_BUFFER,vbo);

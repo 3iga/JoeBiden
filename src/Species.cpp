@@ -6,7 +6,7 @@ const std::array<Species,SpeciesCount> SpeciesList={{
     {"Ocellaris clownfish","Amphiprion ocellaris",
      "A small orange reef fish with three pale bars. It lives in a close association with host sea anemones.",
      "A breeding group is led by a female; a breeding male can become female when she disappears.",
-     "https://www.aquariumofpacific.org/onlinelearningcenter/species/clown_anemonefish",
+     "https://www.floridamuseum.ufl.edu/discover-fish/species-profiles/clown-anemonefish/",
      "clownfish.bmp",11,.025f,.70f,{.48f,.25f,.14f},{1,.39f,.08f,1},Behaviour::Hover},
     {"Blue tang","Paracanthurus hepatus",
      "A blue Indo-Pacific surgeonfish with a dark body marking and a yellow tail. It uses coral reefs as habitat.",
@@ -21,7 +21,7 @@ const std::array<Species,SpeciesCount> SpeciesList={{
     {"Green humphead parrotfish","Bolbometopon muricatum",
      "A large parrotfish with a prominent forehead and beak-like teeth. It feeds on reef surfaces, including coral.",
      "Its feeding breaks down calcium-carbonate reef material and contributes to the production of sand.",
-     "https://www.fishbase.se/summary/bolbometopon-muricatum",
+     "https://australian.museum/learn/animals/fishes/bumphead-parrotfish-bolbometopon-muricatum-valenciennes-1840/",
      "parrotfish.bmp",130,18,1.05f,{.58f,.30f,.22f},{.22f,.70f,.53f,1},Behaviour::Heavy},
     {"Yellow tang","Zebrasoma flavescens",
      "A bright yellow Pacific surgeonfish with a tall dorsal fin. It grazes on algae in coral-rich habitats.",
@@ -31,18 +31,18 @@ const std::array<Species,SpeciesCount> SpeciesList={{
     {"Moorish idol","Zanclus cornutus",
      "A reef fish with contrasting black, white and yellow bands and a long dorsal-fin streamer.",
      "Its striking silhouette comes from an extended dorsal-fin filament and a small projecting mouth.",
-     "https://www.fishbase.se/summary/Zanclus-cornutus.html",
-     "moorish_idol.bmp",23,.22f,1.0f,{.38f,.36f,.09f},{.99f,.91f,.68f,1},Behaviour::Cruise},
+     "https://australian.museum/learn/animals/fishes/moorish-idol-zanclus-cornutus-linnaeus-1758/",
+     "moorish_idol.bmp",24,.22f,1.0f,{.38f,.36f,.09f},{.99f,.91f,.68f,1},Behaviour::Cruise},
     {"Emperor angelfish","Pomacanthus imperator",
      "An Indo-Pacific angelfish. Adults have alternating blue and yellow stripes and a dark band through the eyes.",
      "Juveniles look very different, with pale curved lines and rings over a dark blue body.",
-     "https://www.fishbase.org/summary/Pomacanthus_imperator.html",
-     "emperor_angelfish.bmp",40,1.1f,1.05f,{.52f,.34f,.12f},{.13f,.40f,.87f,1},Behaviour::Cruise},
+     "https://australian.museum/learn/animals/fishes/emperor-angelfish-pomacanthus-imperator/",
+     "emperor_angelfish.bmp",38,1.1f,1.05f,{.52f,.34f,.12f},{.13f,.40f,.87f,1},Behaviour::Cruise},
     {"Blue-green chromis","Chromis viridis",
      "A small blue-green damselfish often found in groups above branching coral in sheltered reef habitats.",
-     "Branching corals provide shelter, while the fish feed on small plankton in the water above them.",
-     "https://www.fishbase.org/summary/Chromis-viridis.html",
-     "chromis.bmp",10,.018f,1.4f,{.40f,.24f,.105f},{.26f,.90f,.85f,1},Behaviour::Shoal}
+     "It forms schools over corals; unlike the similar blackaxil puller, it lacks a black pectoral-fin base spot.",
+     "https://lifg.australian.museum/Group.html?groupId=bWdTTXD5&hierarchyId=CEJQQmVx",
+     "chromis.bmp",8,.018f,1.4f,{.40f,.24f,.105f},{.26f,.90f,.85f,1},Behaviour::Shoal}
 }};
 const char* behaviourName(Behaviour b) {
     switch(b) {

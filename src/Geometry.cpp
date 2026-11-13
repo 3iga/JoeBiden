@@ -1,6 +1,5 @@
 #include "Geometry.hpp"
 #include "Procedural.hpp"
-#include <functional>
 
 
 static void triangle(MeshData& m,unsigned a,unsigned b,unsigned c) {
@@ -31,21 +30,6 @@ MeshData makeSphere(int slices,int rings) {
     }
     return m;
 }
-MeshData makeSeabed() {
-    MeshData m;constexpr int S=96;constexpr float half=36;
-    for(int j=0;j<=S;++j)for(int i=0;i<=S;++i) {
-        float x=-half+2*half*float(i)/S,z=-half+2*half*float(j)/S;
-        constexpr float e=.05f;
-        float dx=(seabedHeight(x+e,z)-seabedHeight(x-e,z))/(2*e);
-        float dz=(seabedHeight(x,z+e)-seabedHeight(x,z-e))/(2*e);
-        m.vertices.push_back({{x,seabedHeight(x,z),z},safeNormalize(Vec3(-dx,1,-dz)),{float(i)/S,float(j)/S}});
-    }
-    for(int j=0;j<S;++j)for(int i=0;i<S;++i) {
-        unsigned a=unsigned(j*(S+1)+i),b=a+S+1;
-        triangle(m,a,b,a+1);triangle(m,a+1,b,b+1);
-    }
-    return m;
-}
 static void cylinder(MeshData& m,Vec3 a,Vec3 b,float ra,float rb,int sides=9) {
     Vec3 axis=safeNormalize(b-a),helper=std::abs(axis.y)>.9f?Vec3(1,0,0):Vec3(0,1,0);
     Vec3 right=safeNormalize(cross(axis,helper)),front=cross(axis,right);
@@ -64,29 +48,6 @@ static void cylinder(MeshData& m,Vec3 a,Vec3 b,float ra,float rb,int sides=9) {
     unsigned center=static_cast<unsigned>(m.vertices.size());
     m.vertices.push_back({b+axis*rb*.15f,axis,{.5f,.5f}});
     for(int i=0;i<sides;++i)triangle(m,center,base+unsigned(sides+1+i),base+unsigned(sides+2+i));
-}
-MeshData makeBranchCoral() {
-    MeshData m;Random rng(117);MeshData bulb=makeSphere(8,5);
-    std::function<void(Vec3,Vec3,float,float,int)> branch;
-    branch=[&](Vec3 start,Vec3 direction,float len,float radius,int depth) {
-        Vec3 end=start+safeNormalize(direction)*len;
-        cylinder(m,start,end,radius,radius*.63f);
-        append(m,bulb,end,Vec3(radius*.68f));
-        if(depth==0)return;
-        int count=depth==2?3:2;
-        for(int i=0;i<count;++i) {
-            float a=rng.range(0,2*Pi);
-            Vec3 d=safeNormalize(direction*.56f+Vec3(std::cos(a)*.72f,.55f,std::sin(a)*.72f));
-            branch(end,d,len*rng.range(.59f,.78f),radius*.60f,depth-1);
-        }
-    };
-    cylinder(m,{0,0,0},{0,.38f,0},.21f,.17f);
-    for(int i=0;i<6;++i) {
-        float a=2*Pi*float(i)/6;
-        branch({0,.24f,0},{std::cos(a)*.65f,.95f,std::sin(a)*.65f},rng.range(.65f,.95f),.13f,2);
-    }
-    branch({0,.25f,0},{0,1,0},.95f,.14f,2);
-    return m;
 }
 MeshData makeTubeCoral(std::uint32_t seed) {
     MeshData m;Random rng(seed);constexpr int S=18;
@@ -114,21 +75,6 @@ MeshData makeTubeCoral(std::uint32_t seed) {
     }
     return m;
 }
-MeshData makePlateCoral() {
-    MeshData m;MeshData orb=makeSphere(32,12);
-    for(int level=0;level<5;++level) {
-        float a=level*2.35f,r=.95f-level*.11f;
-        MeshData plate=orb;
-        for(auto& v:plate.vertices) {
-            float theta=std::atan2(v.position.z,v.position.x);
-            float wave=1+.10f*std::sin(8*theta+level)*std::sin(std::acos(clamp(v.position.y,-1,1)));
-            v.position.x*=wave;v.position.z*=wave;
-        }
-        append(m,plate,{.16f*std::sin(a),.3f+level*.27f,.18f*std::cos(a)},{r,.10f,r});
-    }
-    cylinder(m,{0,0,0},{0,1.25f,0},.15f,.075f);
-    return m;
-}
 MeshData makeRock() {
     MeshData m=makeSphere(18,12);
     for(auto& v:m.vertices) {
@@ -146,7 +92,7 @@ MeshData makeRock() {
     return m;
 }
 MeshData makeKelp() {
-    MeshData m;Random rng(531);
+    MeshData m; m.twoSided = true;Random rng(531);
     for(int leaf=0;leaf<7;++leaf) {
         float height=rng.range(1.5f,3.4f),angle=rng.range(0,2*Pi),width=rng.range(.16f,.32f);
         Vec3 lateral(std::cos(angle),0,std::sin(angle));
@@ -163,13 +109,13 @@ MeshData makeKelp() {
     return m;
 }
 MeshData makeTail() {
-    MeshData m;
+    MeshData m; m.twoSided = true;
     // Tail is local to its pivot, which sits behind the fish body.
     m.vertices={{{0,0,0},{0,0,1},{.5f,.5f}},{{-.36f,.30f,0},{0,0,1},{0,1}},{{-.36f,-.30f,0},{0,0,1},{0,0}}};
     m.indices={0,1,2};return m;
 }
 MeshData makeFin() {
-    MeshData m;
+    MeshData m; m.twoSided = true;
     m.vertices={{{-.30f,0,0},{0,0,1},{0,0}},{{.20f,0,0},{0,0,1},{1,0}},{{-.12f,.28f,0},{0,0,1},{.5f,1}}};
     m.indices={0,1,2};return m;
 }
@@ -181,9 +127,7 @@ MeshData makeRing() {
     }
     for(int i=0;i<S;++i){unsigned a=unsigned(i*2);triangle(m,a,a+2,a+1);triangle(m,a+1,a+2,a+3);}return m;
 }
-} // namespace reef
 
-namespace reef {
 void recalculateNormals(MeshData& m) {
     for(auto& v:m.vertices)v.normal={0,0,0};
     for(std::size_t i=0;i+2<m.indices.size();i+=3) {
@@ -257,7 +201,7 @@ MeshData makeGrowthCoral(std::uint32_t seed,bool fan) {
     return mesh;
 }
 MeshData makeRuffledCoral(std::uint32_t seed) {
-    Random rng(seed);MeshData m;constexpr int S=48,R=7;
+    Random rng(seed);MeshData m; m.twoSided = true;constexpr int S=48,R=7;
     for(int plate=0;plate<4;++plate) {
         float radius=1.1f-float(plate)*.16f,phase=rng.range(0,2*Pi);
         unsigned base=static_cast<unsigned>(m.vertices.size());
@@ -276,4 +220,29 @@ MeshData makeCoralVariant(int v) {
     if(v<6)return makeGrowthCoral(721u+unsigned(v)*531u,true);
     if(v<8)return makeRuffledCoral(811u+unsigned(v)*71u);
     return makeTubeCoral(192u+unsigned(v)*107u);
+}
+
+// A stylized extinct-shark silhouette, not a scientifically reconstructed animal.
+MeshData makeSharkBody() {
+    MeshData mesh = makeSphere(28, 16);
+    for (auto& vertex : mesh.vertices) {
+        float x = vertex.position.x;
+        float taper = x < 0 ? .25f + .75f * (x + 1.0f) : 1.0f - .28f * x;
+        vertex.position = Vec3(x * 3.6f, vertex.position.y * .78f * taper,
+                              vertex.position.z * .72f * taper);
+    }
+    recalculateNormals(mesh);
+    return mesh;
+}
+MeshData makeSharkTail() {
+    MeshData mesh;
+    mesh.twoSided = true;
+    mesh.vertices = {
+        {{0, 0, 0}, {0, 0, 1}, {.5f, .5f}},
+        {{-1.5f, 2.0f, 0}, {0, 0, 1}, {0, 1}},
+        {{-.80f, .15f, 0}, {0, 0, 1}, {.2f, .5f}},
+        {{-1.25f, -1.25f, 0}, {0, 0, 1}, {0, 0}}
+    };
+    mesh.indices = {0, 1, 2, 0, 2, 3};
+    return mesh;
 }
