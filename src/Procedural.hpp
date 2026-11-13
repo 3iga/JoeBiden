@@ -1,10 +1,10 @@
 #pragma once
-#include "Math.hpp"
+#include "MathSupport.hpp"
 #include <cstdint>
 #include <random>
 #include <vector>
 
-namespace reef {
+
 struct Random {
     std::mt19937 engine;
     explicit Random(std::uint32_t seed):engine(seed){}
@@ -37,4 +37,3 @@ inline std::vector<Vec2> scatter(std::uint32_t seed,int target,float minDistance
     }
     return points; // Actual accepted count is shown in the UI, not assumed.
 }
-} // namespace reef

@@ -2,38 +2,68 @@
 #include "Procedural.hpp"
 #include <fstream>
 #include <sstream>
-#include <stdexcept>
+
 #include <iostream>
 #include <array>
+#include <cstring>
+#include <cstdint>
 
-namespace reef {
-static std::string readText(const std::filesystem::path& path) {
-    std::ifstream f(path);
-    if(!f) throw std::runtime_error("Cannot read shader: "+path.string());
-    std::ostringstream s;s<<f.rdbuf();return s.str();
+
+static bool readText(const std::filesystem::path& path, std::string& text) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        std::cerr << "ERROR: cannot read shader " << path << '\n';
+        return false;
+    }
+    std::ostringstream stream;
+    stream << file.rdbuf();
+    text = stream.str();
+    return !file.bad();
 }
-static GLuint compile(GLenum kind,const std::filesystem::path& path) {
-    std::string text=readText(path);const char* c=text.c_str();
-    GLuint shader=glCreateShader(kind);glShaderSource(shader,1,&c,nullptr);glCompileShader(shader);
-    GLint ok=0;glGetShaderiv(shader,GL_COMPILE_STATUS,&ok);
-    if(!ok) {
-        GLint n=0;glGetShaderiv(shader,GL_INFO_LOG_LENGTH,&n);
-        std::string log(std::max(n,1), '\0');glGetShaderInfoLog(shader,n,nullptr,log.data());
-        glDeleteShader(shader);throw std::runtime_error(path.string()+"\n"+log);
+static GLuint compile(GLenum type, const std::filesystem::path& path) {
+    std::string text;
+    if (!readText(path, text)) return 0;
+    const char* source = text.c_str();
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, &source, nullptr);
+    glCompileShader(shader);
+    GLint ok = 0;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+    if (!ok) {
+        GLint size = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &size);
+        std::string log(std::max(size, 1), '\0');
+        glGetShaderInfoLog(shader, size, nullptr, log.data());
+        std::cerr << "ERROR: shader compilation " << path << "\n" << log << '\n';
+        glDeleteShader(shader);
+        return 0;
     }
     return shader;
 }
-Shader::Shader(const std::filesystem::path& v,const std::filesystem::path& f) {
-    GLuint vs=compile(GL_VERTEX_SHADER,v),fs=0;
-    try { fs=compile(GL_FRAGMENT_SHADER,f); }
-    catch(...) { glDeleteShader(vs);throw; }
-    id_=glCreateProgram();glAttachShader(id_,vs);glAttachShader(id_,fs);glLinkProgram(id_);
-    glDeleteShader(vs);glDeleteShader(fs);
-    GLint ok=0;glGetProgramiv(id_,GL_LINK_STATUS,&ok);
-    if(!ok) {
-        GLint n=0;glGetProgramiv(id_,GL_INFO_LOG_LENGTH,&n);
-        std::string log(std::max(n,1),'\0');glGetProgramInfoLog(id_,n,nullptr,log.data());
-        glDeleteProgram(id_);id_=0;throw std::runtime_error("Shader link failed: "+log);
+Shader::Shader(const std::filesystem::path& vertex, const std::filesystem::path& fragment) {
+    GLuint vs = compile(GL_VERTEX_SHADER, vertex);
+    GLuint fs = compile(GL_FRAGMENT_SHADER, fragment);
+    if (!vs || !fs) {
+        if (vs) glDeleteShader(vs);
+        if (fs) glDeleteShader(fs);
+        return;
+    }
+    id_ = glCreateProgram();
+    glAttachShader(id_, vs);
+    glAttachShader(id_, fs);
+    glLinkProgram(id_);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    GLint ok = 0;
+    glGetProgramiv(id_, GL_LINK_STATUS, &ok);
+    if (!ok) {
+        GLint size = 0;
+        glGetProgramiv(id_, GL_INFO_LOG_LENGTH, &size);
+        std::string log(std::max(size, 1), '\0');
+        glGetProgramInfoLog(id_, size, nullptr, log.data());
+        std::cerr << "ERROR: shader link\n" << log << '\n';
+        glDeleteProgram(id_);
+        id_ = 0;
     }
 }
 Shader::~Shader() { if(id_) glDeleteProgram(id_); }
@@ -46,7 +76,7 @@ void Shader::set(const std::string& n,float x) const { glUniform1f(location(n),x
 void Shader::set(const std::string& n,Vec2 x) const { glUniform2f(location(n),x.x,x.y); }
 void Shader::set(const std::string& n,Vec3 x) const { glUniform3f(location(n),x.x,x.y,x.z); }
 void Shader::set(const std::string& n,Vec4 x) const { glUniform4f(location(n),x.x,x.y,x.z,x.w); }
-void Shader::set(const std::string& n,const Mat4& x) const { glUniformMatrix4fv(location(n),1,GL_FALSE,x.data()); }
+void Shader::set(const std::string& n,const Mat4& x) const { glUniformMatrix4fv(location(n),1,GL_FALSE,glm::value_ptr(x)); }
 Mesh::Mesh(const MeshData& data) {
     indexCount=static_cast<GLsizei>(data.indices.size());
     glGenVertexArrays(1,&vao);glGenBuffers(1,&vbo);glGenBuffers(1,&ebo);glGenBuffers(1,&instanceBuffer);
@@ -70,7 +100,7 @@ Mesh::Mesh(const MeshData& data) {
     glVertexAttribDivisor(7,1);
     glBindVertexArray(0);
     // Also provide valid attribute data for non-instanced draws.
-    setInstances({Instance{Mat4::identity(),{1,1,1,1}}});
+    setInstances({Instance{Mat4(1.0f),{1,1,1,1}}});
 }
 Mesh::~Mesh() {
     glDeleteBuffers(1,&instanceBuffer);glDeleteBuffers(1,&ebo);glDeleteBuffers(1,&vbo);glDeleteVertexArrays(1,&vao);
@@ -79,15 +109,12 @@ void Mesh::setInstances(const std::vector<Instance>& data) {
     instanceCount=static_cast<GLsizei>(data.size());
     glBindBuffer(GL_ARRAY_BUFFER,instanceBuffer);
     // Do not leave an empty enabled instance buffer; still issue zero draws for zero instances.
-    Instance dummy{Mat4::identity(),{1,1,1,1}};
-    glBufferData(GL_ARRAY_BUFFER,static_cast<GLsizeiptr>(std::max(std::size_t(1),data.size())*sizeof(Instance)),data.empty()?&dummy:data.data(),GL_STATIC_DRAW);
+    Instance dummy{Mat4(1.0f),{1,1,1,1}};
+    glBufferData(GL_ARRAY_BUFFER,static_cast<GLsizeiptr>(std::max(std::size_t(1),data.size())*sizeof(Instance)),data.empty()?&dummy:data.data(),GL_STREAM_DRAW);
 }
-void Mesh::draw() const { glBindVertexArray(vao);glDrawElements(GL_TRIANGLES,indexCount,GL_UNSIGNED_INT,nullptr); }
-void Mesh::drawInstances() const {
-    if(instanceCount==0) return;
-    glBindVertexArray(vao);glDrawElementsInstanced(GL_TRIANGLES,indexCount,GL_UNSIGNED_INT,nullptr,instanceCount);
-}
+
 void Texture::uploadRGB(int size,const std::vector<unsigned char>& pixels) {
+    width=height=size;
     if(!id) glGenTextures(1,&id);
     glBindTexture(GL_TEXTURE_2D,id);glPixelStorei(GL_UNPACK_ALIGNMENT,1);
     glTexImage2D(GL_TEXTURE_2D,0,GL_RGB8,size,size,0,GL_RGB,GL_UNSIGNED_BYTE,pixels.data());
@@ -109,7 +136,11 @@ void makeMaterial(Material& m,int kind) {
         if(kind==0) { h=.5f+.33f*std::sin(8*b+1.2f*std::sin(2*a))+.07f*fine;c=Vec3(.86f,.83f,.67f)*(.83f+.19f*h); }
         if(kind==1) { h=.45f+.30f*std::sin(12*a+std::sin(3*b))*std::sin(12*b)+.10f*fine;c=Vec3(.88f+.12f*h); }
         if(kind==2) { h=.5f+.18f*std::sin(3*a+std::cos(2*b))+.15f*std::cos(5*b+std::sin(4*a))+.1f*fine;c=Vec3(.47f,.54f,.48f)*(.7f+.45f*h); }
-        if(kind==3) { float band=std::pow(.5f+.5f*std::sin(5*a+std::sin(b)),16);h=.5f+.03f*std::sin(24*a)*std::sin(14*b);c=mix(Vec3(.72f,.87f,.96f),Vec3(.13f,.23f,.31f),band*.88f); }
+        if(kind==3) {
+            float scales=.5f+.5f*std::sin(32*a+2.2f*std::sin(5*b))*std::sin(24*b+1.4f*std::sin(3*a));
+            h=.5f+.035f*std::sin(18*a)*std::sin(12*b)+.025f*scales;
+            c=Vec3(.94f,.98f,.97f)*(.90f+.10f*scales);
+        }
         if(kind==4) { h=.5f+.2f*std::sin(6*a);c=Vec3(.48f,.82f,.45f)*(.80f+.2f*h); }
         heights[y*N+x]=h;int k=(y*N+x)*3;
         color[k]=byte(c.x);color[k+1]=byte(c.y);color[k+2]=byte(c.z);
@@ -118,7 +149,7 @@ void makeMaterial(Material& m,int kind) {
     for(int y=0;y<N;++y) for(int x=0;x<N;++x) {
         float dx=heights[y*N+(x+1)%N]-heights[y*N+(x+N-1)%N];
         float dy=heights[((y+1)%N)*N+x]-heights[((y+N-1)%N)*N+x];
-        Vec3 n=normalize(Vec3(-dx*strength,-dy*strength,1));int k=(y*N+x)*3;
+        Vec3 n=safeNormalize(Vec3(-dx*strength,-dy*strength,1));int k=(y*N+x)*3;
         normal[k]=byte(n.x*.5f+.5f);normal[k+1]=byte(n.y*.5f+.5f);normal[k+2]=byte(n.z*.5f+.5f);
     }
     m.diffuse.uploadRGB(N,color);m.normal.uploadRGB(N,normal);
@@ -144,15 +175,17 @@ void makeCaustics(Texture& texture) {
     }
     texture.uploadRGB(N,pixels);
 }
-void saveScreenshot(const std::filesystem::path& path,int width,int height) {
+bool saveScreenshot(const std::filesystem::path& path,int width,int height) {
     // 24-bit BMP, bottom-up rows: glReadPixels already gives the needed row order.
-    if(width<=0||height<=0) throw std::runtime_error("Cannot capture a zero-sized framebuffer");
-    if(!path.parent_path().empty()) std::filesystem::create_directories(path.parent_path());
+    if (width <= 0 || height <= 0) { std::cerr << "ERROR: zero-sized screenshot\n"; return false; }
+    std::error_code error;
+    if (!path.parent_path().empty()) std::filesystem::create_directories(path.parent_path(), error);
+    if (error) { std::cerr << "ERROR: screenshot folder: " << error.message() << '\n'; return false; }
     std::vector<unsigned char> rgb(std::size_t(width)*height*3);
     glPixelStorei(GL_PACK_ALIGNMENT,1);glReadBuffer(GL_BACK);
     glReadPixels(0,0,width,height,GL_RGB,GL_UNSIGNED_BYTE,rgb.data());
     unsigned stride=(unsigned(width)*3+3)&~3u,size=54+stride*unsigned(height);
-    std::ofstream out(path,std::ios::binary);if(!out) throw std::runtime_error("Cannot save "+path.string());
+    std::ofstream out(path,std::ios::binary);if (!out) { std::cerr << "ERROR: cannot save " << path << '\n'; return false; }
     auto u16=[&](unsigned v){out.put(char(v&255));out.put(char((v>>8)&255));};
     auto u32=[&](unsigned v){for(int i=0;i<4;++i)out.put(char((v>>(8*i))&255));};
     out.put('B');out.put('M');u32(size);u16(0);u16(0);u32(54);u32(40);u32(unsigned(width));u32(unsigned(height));
@@ -164,15 +197,36 @@ void saveScreenshot(const std::filesystem::path& path,int width,int height) {
         }
         for(unsigned p=unsigned(width)*3;p<stride;++p)out.put(0);
     }
-    if(!out) throw std::runtime_error("Failed while writing "+path.string());
+    if (!out) { std::cerr << "ERROR: screenshot write " << path << '\n'; return false; }
+    return true;
 }
-std::filesystem::path locateShaders(const char* executable) {
-    namespace fs=std::filesystem;
-    std::vector<fs::path> paths={fs::absolute(executable).parent_path()/"shaders",fs::current_path()/"shaders"};
-#ifdef REEF_SOURCE_DIR
-    paths.emplace_back(fs::path(REEF_SOURCE_DIR)/"shaders");
-#endif
-    for(const auto& p:paths) if(fs::exists(p/"reef.vert"))return p;
-    throw std::runtime_error("Shader folder not found. Keep shaders/ next to LuminousReef.exe.");
+bool Texture::loadBMP(const std::filesystem::path& path,std::string& error) {
+    // Dependency-free decoder for the 24/32-bit BI_RGB BMPs produced by setup_photos.ps1.
+    std::ifstream f(path,std::ios::binary|std::ios::ate);
+    if(!f){error="Photo not installed. Run setup_photos.bat with Internet access.";return false;}
+    auto size=f.tellg();
+    if(size<54||size>64*1024*1024){error="Invalid BMP size";return false;}
+    std::vector<unsigned char> bytes(static_cast<std::size_t>(size));f.seekg(0);
+    if(!f.read(reinterpret_cast<char*>(bytes.data()),size)){error="Incomplete BMP";return false;}
+    auto u16=[&](int p){return unsigned(bytes[std::size_t(p)])|(unsigned(bytes[std::size_t(p+1)])<<8);};
+    auto u32=[&](int p){std::uint32_t n=0;for(int i=0;i<4;++i)n|=std::uint32_t(bytes[std::size_t(p+i)])<<(i*8);return n;};
+    std::uint32_t offset=u32(10),dib=u32(14);std::int32_t w=0,h=0;auto a=u32(18),b=u32(22);
+    std::memcpy(&w,&a,4);std::memcpy(&h,&b,4);
+    unsigned bits=u16(28);
+    if(bytes[0]!='B'||bytes[1]!='M'||dib<40||offset<54||u16(26)!=1||u32(30)!=0||
+       w<1||w>8192||h==0||h < -8192||h>8192||(bits!=24&&bits!=32)) {error="Expected an uncompressed 24/32-bit BMP";return false;}
+    int heightAbs=std::abs(h);std::size_t stride=(std::size_t(w)*(bits/8)+3)&~std::size_t(3);
+    if(std::size_t(offset)+stride*std::size_t(heightAbs)>bytes.size()){error="Truncated BMP pixels";return false;}
+    std::vector<unsigned char> rgb(std::size_t(w)*heightAbs*3);
+    for(int y=0;y<heightAbs;++y)for(int x=0;x<w;++x) {
+        std::size_t row=std::size_t(h>0?heightAbs-1-y:y);
+        std::size_t from=offset+row*stride+std::size_t(x)*(bits/8),to=(std::size_t(y)*w+x)*3;
+        rgb[to]=bytes[from+2];rgb[to+1]=bytes[from+1];rgb[to+2]=bytes[from];
+    }
+    width=w;height=heightAbs;if(!id)glGenTextures(1,&id);
+    glBindTexture(GL_TEXTURE_2D,id);glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGB8,width,height,0,GL_RGB,GL_UNSIGNED_BYTE,rgb.data());
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    error.clear();return true;
 }
-} // namespace reef
