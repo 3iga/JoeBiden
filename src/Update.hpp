@@ -33,6 +33,7 @@ void regenerate(Scene& scene);
 void returnHome(Scene& scene, bool focus=false);
 void resetCoral(Scene& scene);
 void selectFish(Scene& scene, int index);
+void selectStructure(Scene& scene, std::uint32_t id);
 static Lighting lighting(float hour);
 void startSurvey(Scene& scene);
 void resetSurvey(Scene& scene);

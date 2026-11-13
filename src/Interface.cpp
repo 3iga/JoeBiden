@@ -1,6 +1,8 @@
 #include "Interface.hpp"
 #include <imgui.h>
 #include <algorithm>
+#include <windows.h>
+#include <shellapi.h>
 #include "ProjectInfo.hpp"
 
 void Ui::fieldGuide(Scene& scene, const std::array<PhotoView, SpeciesCount>& photos) {
@@ -54,6 +56,52 @@ void Ui::fieldGuide(Scene& scene, const std::array<PhotoView, SpeciesCount>& pho
     }
     ImGui::End();
 }
+void Ui::structureGuide(Scene& scene) {
+    if (!scene.showStructureInfo)return;
+    const Object* object=scene.selectedStructure();
+    if (!object) {
+        scene.showStructureInfo=false;
+        scene.selectedStructureId=0;
+        return;
+    }
+    const StructureInfo& info=structureInfo(object->variant);
+    const auto display=ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos({20, 195}, ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize({430, std::max(310.0f, display.y-245)}, ImGuiCond_Appearing);
+    if (ImGui::Begin("Seafloor field guide", &scene.showStructureInfo)) {
+        ImGui::TextColored({.67f, .88f, .78f, 1}, "%s", info.name);
+        ImGui::TextDisabled("%s", info.className);
+        ImGui::Separator();
+        ImGui::TextWrapped("This is a procedural 3D specimen placed in the generated ocean. Its in-game coordinates are fictional; the historical facts below describe its real-world reference.");
+        ImGui::SeparatorText("Historical reference");
+        ImGui::TextWrapped("Sinking / loss: %s", info.sinking);
+        ImGui::TextWrapped("Real site: %s", info.site);
+        ImGui::TextWrapped("Located / documented: %s", info.discovery);
+        ImGui::TextWrapped("Depth at real site: %s", info.depth);
+        ImGui::Spacing();
+        ImGui::TextWrapped("About this wreck: %s", info.context);
+        double x=0, z=0;
+        if (scene.selectedStructureLocation(x, z))
+            ImGui::TextDisabled("Generated dive-map position: X %.0f / Z %.0f", x, z);
+        if (info.source[0]||info.source2[0]) {
+            ImGui::Separator();
+            ImGui::TextDisabled("Reference source");
+            if (info.source[0]) {
+                ImGui::TextWrapped("%s", info.source);
+                if (ImGui::Button("Copy source 1"))ImGui::SetClipboardText(info.source);
+                ImGui::SameLine();
+                if (ImGui::Button("Open source 1 online"))ShellExecuteA(nullptr, "open", info.source, nullptr, nullptr, SW_SHOWNORMAL);
+            }
+            if (info.source2[0]) {
+                ImGui::TextWrapped("%s", info.source2);
+                if (ImGui::Button("Copy source 2"))ImGui::SetClipboardText(info.source2);
+                ImGui::SameLine();
+                if (ImGui::Button("Open source 2 online"))ShellExecuteA(nullptr, "open", info.source2, nullptr, nullptr, SW_SHOWNORMAL);
+            }
+        }
+    }
+    ImGui::End();
+}
 InputFrame Ui::build(Scene& s, const RenderStats& stats, const std::array<PhotoView, SpeciesCount>& photos, bool captured, float fps, float ms) {
     InputFrame request;
     if (!s.settings.ui)return request;
@@ -75,7 +123,7 @@ InputFrame Ui::build(Scene& s, const RenderStats& stats, const std::array<PhotoV
         ImGui::TextDisabled("World X %.1f / Z %.1f", s.worldX(), s.worldZ());
         ImGui::Text("Survey: %d / %d | %.0f s", s.discoveries(), SpeciesCount, s.survey.remaining);
         ImGui::TextDisabled("F1 help | F5 reset survey | F9 record FPS");
-        ImGui::TextColored({.97f, .82f, .45f, 1}, "%s", captured?"DIVE MODE - TAB releases the cursor":"CLICK A FISH TO INSPECT IT");
+        ImGui::TextColored({.97f, .82f, .45f, 1}, "%s", captured?"DIVE MODE - TAB releases the cursor":"CLICK A FISH OR WRECK");
     }
     ImGui::End();
     ImGui::SetNextWindowPos({std::max(440.0f, display.x-358), 18}, ImGuiCond_FirstUseEver);
@@ -138,7 +186,7 @@ InputFrame Ui::build(Scene& s, const RenderStats& stats, const std::array<PhotoV
                 ImGui::Text("Pending generation: %d", s.pendingChunks);
                 ImGui::Text("Visible tiles: %d / GPU tiles: %d", stats.chunksDrawn, stats.gpuChunks);
                 ImGui::Text("Objects culled: %d", stats.objectsCulled);
-                ImGui::TextWrapped("New terrain, corals and rocks load as you swim. Old tiles leave memory. Returning to a tile reproduces its static layout.");
+                ImGui::TextWrapped("The ocean floor shifts between quiet sediment plains, high seamounts, deep trenches and large crater basins. Coral patches, kelp and seagrass occupy separate habitats; debris gathers in small fields and wreck sites are widely spaced. The same seed recreates each site when revisited.");
                 ImGui::SeparatorText("Movement");
                 ImGui::SliderFloat("Camera speed", &settings.swimSpeed, 1, 20, "%.1f");
                 ImGui::SliderFloat("Fish speed scale", &settings.fishSpeed, .05f, 3, "%.2fx");
@@ -163,7 +211,7 @@ InputFrame Ui::build(Scene& s, const RenderStats& stats, const std::array<PhotoV
             }
             if (ImGui::BeginTabItem("Log")) {
                 ImGui::Text("Discovered: %d / %d", s.discoveries(), SpeciesCount);
-                ImGui::TextWrapped("Press Tab, then click a fish in the scene. Coral and rocks block picking, just as they block visibility.");
+                ImGui::TextWrapped("Press Tab, then click a fish to inspect its species or click a wreck to read its seafloor field guide. Foreground terrain and objects block picking.");
                 for (int i=0; i<SpeciesCount; ++i) {
                     std::string label=std::string(s.discovered[std::size_t(i)]?"[found] ":"[  ?  ] ")+SpeciesList[std::size_t(i)].name;
                     if (ImGui::Selectable(label.c_str(), s.guideSpecies==i)) {
@@ -181,6 +229,7 @@ InputFrame Ui::build(Scene& s, const RenderStats& stats, const std::array<PhotoV
     }
     ImGui::End();
     fieldGuide(s, photos);
+    structureGuide(s);
     if (s.showHelp) {
         ImGui::SetNextWindowSize({480, 330}, ImGuiCond_Appearing);
         if (ImGui::Begin("Controls and scope", &s.showHelp)) {

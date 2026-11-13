@@ -14,6 +14,7 @@ std::string credit, error;
 };
 struct Ui {
 void fieldGuide(Scene& scene, const std::array<PhotoView, SpeciesCount>& photos);
+void structureGuide(Scene& scene);
 public:
 InputFrame build(Scene& scene, const RenderStats& stats, const std::array<PhotoView, SpeciesCount>& photos,
 bool captured, float fps, float frameMs);

@@ -176,8 +176,9 @@ static int run(GLFWwindow* window, const std::filesystem::path& folder) {
             glfwGetCursorPos(window, &x, &y);
             int px = int(x * double(width) / windowWidth);
             int py = height - 1 - int(y * double(height) / windowHeight);
-            int fish = renderer.pick(scene, px, py);
-            if (fish >= 0) update.selectFish(scene, fish);
+            int picked = renderer.pick(scene, px, py);
+            if (picked>=int(StructurePickBase))update.selectStructure(scene, static_cast<std::uint32_t>(picked));
+            else if (picked >= 0) update.selectFish(scene, picked);
             else captureMouse(window, input, true);
         }
         renderer.endUI();

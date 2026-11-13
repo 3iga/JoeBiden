@@ -13,9 +13,9 @@ Executable: **`bin\Debug\LuminousReef.exe`**. Keep its `shaders` and `assets` su
 
 ## What to do first
 
-The reef and animated caustics are visible immediately. The Dive panel offers a three-minute survey: press **Enter**, release the mouse with **Tab**, and click visible fish to discover all eight species. The same species counts once; browsing the Log does not score. Timeout and completion both allow another attempt without restarting the process. **F5** returns to the ready state. Free exploration continues after the timer ends.
+The reef, a nearby wrecked liner and animated caustics are visible immediately. The Dive panel offers a three-minute survey: press **Enter**, release the mouse with **Tab**, and click visible fish to discover all eight species. The same species counts once; browsing the Log does not score. Timeout and completion both allow another attempt without restarting the process. **F5** returns to the ready state. Free exploration continues after the timer ends.
 
-Use **C** to compare caustics. In **Light**, compare Noon, Dusk and Midnight; disable the automatic cycle for a fixed hour. In **World**, change density or swim beyond the old demo boundaries. The experimental **Spawn Megalodon** button creates one stylized, explicitly fictional extinct-animal encounter. It is separate from the eight-species objective.
+Use **C** to compare caustics. In **Light**, compare Noon, Dusk and Midnight; disable the automatic cycle for a fixed hour. In **World**, change density or swim beyond the old demo boundaries. The generated seafloor now alternates between broad sediment plains, rolling slopes, high seamounts, winding trenches and deep volcanic-style craters. Coral is confined to separated reef patches; kelp and seagrass form their own beds. Small debris collects in occasional patches, while wrecks and ruins are spaced hundreds of metres apart. Click a wreck to open the **Seafloor field guide**. It separates the fictional in-game placement from facts about a real historical reference, including its loss, site, discovery and depth. Use **Open source online** to visit its reference pages. The experimental **Spawn Megalodon** button creates one stylized, explicitly fictional extinct-animal encounter. It is separate from the eight-species objective.
 
 ## Controls
 
@@ -32,7 +32,7 @@ Use **C** to compare caustics. In **Light**, compare Noon, Dusk and Midnight; di
 | 1 / 2 / 3 | Featured coral translation / rotation / scale mode |
 | J–L / K–I / U–O | Decrease–increase X / Y / Z transform component |
 | Backspace | Reset featured coral transform |
-| Left-click visible fish | Inspect species; score a discovery during an active survey |
+| Left-click a visible fish or wreck | Inspect a species or open the seafloor field guide; fish score only during a survey |
 | F9 / F12 | Record measured FPS sample to CSV / save a BMP screenshot |
 | Esc | Exit |
 
@@ -42,8 +42,8 @@ Keyboard game controls always process input, including when the cursor is on an 
 
 - `Renderer.cpp/.hpp`: OpenGL resources, rendering, material uniforms, instancing, culling, integer-ID/depth picking; `RendererUI.cpp` integrates the actual ImGui backends.
 - `Update.cpp/.hpp`: camera movement, fish steering, streaming/rebasing, day/night, survey state machine and rare encounters. No OpenGL calls.
-- `Scene.hpp/.cpp`, `World.hpp`: plain scene data, seeded chunks and a continuous height field.
-- `Geometry.cpp/.hpp`: attraction-point branches, fans, ruffled plates, tubes, fish parts, shark silhouette and terrain.
+- `Scene.hpp/.cpp`, `World.hpp`: plain scene data, seeded chunk streaming, habitat patches, large seamounts, deep canyons and craters, vegetation, debris and spaced wreck sites.
+- `Geometry.cpp/.hpp`: attraction-point coral branches, fish and shark parts, procedural wrecks, seagrass, debris, ruins and terrain.
 - `Graphics.cpp/.hpp`: explicit-return shader loading, GPU buffer/texture helpers and checked BMP I/O. All scene draw submissions are in Renderer.
 - `MathSupport.hpp`: aliases and small composition wrappers around **real GLM**, not a replacement math implementation.
 - `Interface.cpp/.hpp`: all on-screen controls, help and species information in Dear ImGui.

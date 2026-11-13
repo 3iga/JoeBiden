@@ -32,11 +32,96 @@ inline double valueNoise(double x, double z, std::uint32_t seed) {
     double n01=noiseValue(ix, iz+1, seed), n11=noiseValue(ix+1, iz+1, seed);
     return (n00*(1-a)+n10*a)*(1-b)+(n01*(1-a)+n11*a)*b;
 }
+inline float smooth01(float a, float b, float v);
+inline float mountainRelief(double x, double z, std::uint32_t seed) {
+    constexpr double cellSize=520.0;
+    const auto cellX=static_cast<std::int64_t>(std::floor(x/cellSize));
+    const auto cellZ=static_cast<std::int64_t>(std::floor(z/cellSize));
+    float relief=0;
+    for (std::int64_t dz=-1; dz<=1; ++dz)for (std::int64_t dx=-1; dx<=1; ++dx) {
+        const std::int64_t gx=cellX+dx, gz=cellZ+dz;
+        if (noiseValue(gx, gz, seed+401u)>.49)continue;
+        const double centerX=(double(gx)+.16+.68*noiseValue(gx, gz, seed+409u))*cellSize;
+        const double centerZ=(double(gz)+.16+.68*noiseValue(gx, gz, seed+419u))*cellSize;
+        const double radius=62.0+92.0*noiseValue(gx, gz, seed+431u);
+        const double distance=std::sqrt((x-centerX)*(x-centerX)+(z-centerZ)*(z-centerZ));
+        const double t=distance/radius;
+        if (t>=1.0)continue;
+        const float height=float(38.0+78.0*noiseValue(gx, gz, seed+443u));
+        const float profile=float(std::pow(1.0-t*t, .90));
+        relief=std::max(relief, height*profile);
+    }
+    return relief;
+}
+inline float canyonRelief(double x, double z, std::uint32_t seed) {
+    constexpr double cellSize=520.0;
+    const auto cellX=static_cast<std::int64_t>(std::floor(x/cellSize));
+    const auto cellZ=static_cast<std::int64_t>(std::floor(z/cellSize));
+    float depth=0;
+    for (std::int64_t dz=-1; dz<=1; ++dz)for (std::int64_t dx=-1; dx<=1; ++dx) {
+        const std::int64_t gx=cellX+dx, gz=cellZ+dz;
+        if (noiseValue(gx, gz, seed+503u)>.06)continue;
+        const double centerX=(double(gx)+.5)*cellSize;
+        const double centerZ=(double(gz)+.5)*cellSize;
+        const double angle=noiseValue(gx, gz, seed+509u)*6.283185307179586;
+        const double deltaX=x-centerX, deltaZ=z-centerZ;
+        const double along=deltaX*std::cos(angle)+deltaZ*std::sin(angle);
+        const double across=-deltaX*std::sin(angle)+deltaZ*std::cos(angle);
+        const double phase=noiseValue(gx, gz, seed+521u)*6.283185307179586;
+        const double bend=32.0*std::sin(along*.009+phase)+12.0*std::sin(along*.027+phase*1.7);
+        const double halfWidth=12.0+16.0*noiseValue(gx, gz, seed+523u);
+        const double sideDistance=std::abs(across-bend);
+        if (sideDistance>=halfWidth)continue;
+        const float crossSection=1.0f-smooth01(.12f, 1.0f, float(sideDistance/halfWidth));
+        const float endFade=1.0f-smooth01(float(cellSize*.36), float(cellSize*.5), float(std::abs(along)));
+        const float canyonDepth=float(28.0+52.0*noiseValue(gx, gz, seed+541u));
+        depth=std::max(depth, canyonDepth*crossSection*endFade);
+    }
+    return depth;
+}
+inline float craterRelief(double x, double z, std::uint32_t seed) {
+    constexpr double cellSize=620.0;
+    const auto cellX=static_cast<std::int64_t>(std::floor(x/cellSize));
+    const auto cellZ=static_cast<std::int64_t>(std::floor(z/cellSize));
+    float depression=0, rimHeight=0;
+    for (std::int64_t dz=-1; dz<=1; ++dz)for (std::int64_t dx=-1; dx<=1; ++dx) {
+        const std::int64_t gx=cellX+dx, gz=cellZ+dz;
+        if (gx!=0||gz!=0)if (noiseValue(gx, gz, seed+601u)>.46)continue;
+        const double centerX=(double(gx)+.5)*cellSize+(noiseValue(gx, gz, seed+607u)-.5)*150.0;
+        const double centerZ=(double(gz)+.5)*cellSize+(noiseValue(gx, gz, seed+613u)-.5)*150.0;
+        const double radius=76.0+86.0*noiseValue(gx, gz, seed+617u);
+        const double t=std::sqrt((x-centerX)*(x-centerX)+(z-centerZ)*(z-centerZ))/radius;
+        if (t>=1.30)continue;
+        const float bowl=1.0f-smooth01(.08f, .88f, float(t));
+        const float rim=std::exp(-float((t-.96)*(t-.96))/.016f);
+        const float depth=float(95.0+95.0*noiseValue(gx, gz, seed+619u));
+        const float lip=float(12.0+18.0*noiseValue(gx, gz, seed+631u));
+        depression=std::max(depression, depth*bowl);
+        rimHeight=std::max(rimHeight, lip*rim);
+    }
+    return rimHeight-depression;
+}
 inline float terrainHeight(double x, double z, std::uint32_t seed) {
-    // Continuous global height field. Every neighboring tile samples the same border.
-    return float((valueNoise(x*.024, z*.024, seed)-.5)*3.2 +
-    (valueNoise(x*.085, z*.085, seed+17)-.5)*.65 +
-    .09*std::sin(x*.6+z*.18));
+    // Continuous global bathymetry: broad plains and ridges plus deep trenches and craters.
+    const float startupFade=smooth01(24.0f, 48.0f, float(std::sqrt(x*x+z*z)));
+    const float broad=(float(valueNoise(x*.004, z*.004, seed+17u))-.5f)*14.0f;
+    const float rolling=(float(valueNoise(x*.018, z*.018, seed+29u))-.5f)*5.0f;
+    return float((valueNoise(x*.024, z*.024, seed)-.5)*3.2 + broad+rolling+
+    (valueNoise(x*.085, z*.085, seed+37u)-.5)*.65 +
+    .09*std::sin(x*.6+z*.18))+
+    startupFade*(mountainRelief(x, z, seed)-canyonRelief(x, z, seed)+craterRelief(x, z, seed));
+}
+inline float reefIntensity(double x, double z, std::uint32_t seed) {
+    const float patch=float(valueNoise(x*.003, z*.003, seed+701u));
+    const float distantReef=smooth01(.67f, .84f, patch);
+    const float starter=1.0f-smooth01(35.0f, 105.0f, float(std::sqrt(x*x+z*z)));
+    return std::max(distantReef*.88f, starter*.68f);
+}
+inline float algaeIntensity(double x, double z, std::uint32_t seed) {
+    const float patch=float(valueNoise(x*.0022, z*.0022, seed+719u));
+    const float kelpBed=smooth01(.63f, .81f, patch);
+    const float starter=1.0f-smooth01(42.0f, 115.0f, float(std::sqrt(x*x+z*z)));
+    return std::max(kelpBed*.76f, starter*.46f);
 }
 inline Vec3 chunkOffset(ChunkKey k, ChunkKey origin) {
     return {float(double(k.first-origin.first)*ChunkSize), 0,

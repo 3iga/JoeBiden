@@ -18,6 +18,8 @@ void Update::regenerate(Scene& s) {
     ++s.generation;
     s.selectedFish=-1;
     s.showFishInfo=false;
+    s.showStructureInfo=false;
+    s.selectedStructureId=0;
     s.megalodon = {};
     s.showMegalodonInfo = false;
     lastSeed_=s.settings.seed;
@@ -85,6 +87,10 @@ void Update::stream(Scene& s, int budget) {
     int n=std::min(budget, int(missing.size()));
     for (int i=0; i<n; ++i)s.chunks.emplace(missing[std::size_t(i)], generateChunk(missing[std::size_t(i)], s.settings.seed, s.settings.quality));
     s.pendingChunks=int(missing.size())-n;
+    if (s.showStructureInfo&&!s.selectedStructure()) {
+        s.showStructureInfo=false;
+        s.selectedStructureId=0;
+    }
 }
 Lighting Update::lighting(float hour) {
     const float angle = (hour - 6.0f) * 2.0f * Pi / 24.0f;
@@ -185,7 +191,7 @@ void Update::animateFish(Scene& s, float dt) {
             auto it=s.chunks.find({key.first+x, key.second+z});
             if (it==s.chunks.end())continue;
             Vec3 offset=chunkOffset(it->first, s.origin);
-            for (const auto& o:it->second.objects)if (o.kind!=ObjectKind::Kelp) {
+            for (const auto& o:it->second.objects)if (o.kind!=ObjectKind::Kelp&&o.kind!=ObjectKind::Seagrass) {
                 Vec3 c=offset+o.boundCenter, away=f.position-c;
                 float d=length(away);
                 float r=o.kind==ObjectKind::Coral?o.radius*.53f+.45f:o.radius+.35f;
@@ -222,6 +228,8 @@ void Update::animateBubbles(Scene& s, float dt) {
     }
 }
 void Update::selectFish(Scene& s, int index) {
+    s.showStructureInfo=false;
+    s.selectedStructureId=0;
     if (index == int(s.fish.size()) && s.megalodon.active) {
         s.showMegalodonInfo = true;
         s.selectedFish = -1;
@@ -239,6 +247,19 @@ void Update::selectFish(Scene& s, int index) {
     s.settings.tour=false;
     if (s.survey.state == SurveyState::Active && s.discoveries() == SpeciesCount)
     s.survey.state = SurveyState::Complete;
+}
+void Update::selectStructure(Scene& s, std::uint32_t id) {
+    s.selectedStructureId=id;
+    if (!s.selectedStructure()) {
+        s.selectedStructureId=0;
+        s.showStructureInfo=false;
+        return;
+    }
+    s.selectedFish=-1;
+    s.showFishInfo=false;
+    s.showMegalodonInfo=false;
+    s.showStructureInfo=true;
+    s.settings.tour=false;
 }
 void Update::step(Scene& s, const InputFrame& in, float dt) {
     dt=std::isfinite(dt)?clamp(dt, 0, .25f):0;
