@@ -1,0 +1,7 @@
+Photograph: File:Bolbometopon_muricatum_290186802.jpg
+Author: Dirk Froebel
+License: CC BY 4.0
+License URL: https://creativecommons.org/licenses/by/4.0
+Source: https://commons.wikimedia.org/wiki/File:Bolbometopon_muricatum_290186802.jpg
+Changes: proportionally resized to at most 640 px; converted to 24-bit BMP.
+Retrieved UTC: 2026-11-13

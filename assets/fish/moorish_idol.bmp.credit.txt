@@ -1,0 +1,7 @@
+Photograph: File:Ídolo_moro_(Zanclus_cornutus),_Anilao,_Filipinas,_2023-08-25,_DD_233.jpg
+Author: Diego Delso
+License: CC BY-SA 4.0
+License URL: https://creativecommons.org/licenses/by-sa/4.0
+Source: https://commons.wikimedia.org/wiki/File:%C3%8Ddolo_moro_(Zanclus_cornutus),_Anilao,_Filipinas,_2023-08-25,_DD_233.jpg
+Changes: proportionally resized to at most 640 px; converted to 24-bit BMP.
+Retrieved UTC: 2026-11-13

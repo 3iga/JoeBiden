@@ -6,14 +6,6 @@
 /screenshots/
 /benchmarks/
 /include/.downloads/
-/include/glfw/lib/
-/include/glm/
-/include/imgui/
-/assets/fish/*.bmp
-/assets/fish/*.jpg
-/assets/fish/*.png
-/assets/fish/*.json
-/assets/fish/*.credit.txt
 *.user
 *.suo
 *.obj

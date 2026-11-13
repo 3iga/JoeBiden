@@ -1,0 +1,7 @@
+Photograph: File:Paletten-Doktorfisch_Münster.JPG
+Author: DerHans04
+License: CC BY-SA 3.0
+License URL: https://creativecommons.org/licenses/by-sa/3.0
+Source: https://commons.wikimedia.org/wiki/File:Paletten-Doktorfisch_M%C3%BCnster.JPG
+Changes: proportionally resized to at most 640 px; converted to 24-bit BMP.
+Retrieved UTC: 2026-11-13
