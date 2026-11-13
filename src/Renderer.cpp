@@ -6,7 +6,7 @@
 #include <iostream>
 
 static MeshData streamerMesh() {
-    MeshData m;
+    MeshData m; m.twoSided = true;
     for(int i=0;i<=12;++i) {
         float t=float(i)/12,w=.055f*(1-t)+.005f;
         Vec3 p{-.12f-.45f*t+.10f*std::sin(t*Pi),.3f+t*.9f,0};
@@ -19,7 +19,7 @@ static MeshData streamerMesh() {
 Renderer::Renderer(const std::filesystem::path& p,const std::filesystem::path& assets)
     :shader_(p/"reef.vert",p/"reef.frag"),background_(p/"background.vert",p/"background.frag"),
     bubbleShader_(p/"bubbles.vert",p/"bubbles.frag"),pickShader_(p/"reef.vert",p/"pick.frag"),
-    rock_(makeRock()),kelp_(makeKelp()),sphere_(makeSphere(18,12)),tail_(makeTail()),fin_(makeFin()),ring_(makeRing()),streamer_(streamerMesh()) {
+    rock_(makeRock()),kelp_(makeKelp()),sphere_(makeSphere(18,12)),tail_(makeTail()),fin_(makeFin()),ring_(makeRing()),streamer_(streamerMesh()),sharkBody_(makeSharkBody()),sharkTail_(makeSharkTail()) {
     for(int i=0;i<CoralVariants;++i)coral_[std::size_t(i)]=std::make_unique<Mesh>(makeCoralVariant(i));
     makeMaterial(sandMat_,0);sandMat_.uvScale=1;makeMaterial(coralMat_,1);makeMaterial(rockMat_,2);
     makeMaterial(fishMat_,3);makeMaterial(leafMat_,4);makeMaterial(plainMat_,5);makeCaustics(caustics_);
@@ -52,6 +52,7 @@ Renderer::Renderer(const std::filesystem::path& p,const std::filesystem::path& a
         if(file){std::ostringstream text;text<<file.rdbuf();view.credit=text.str();}
     }
     glEnable(GL_DEPTH_TEST);glEnable(GL_MULTISAMPLE);
+    glFrontFace(GL_CCW); glCullFace(GL_BACK);
 }
 Renderer::~Renderer() {
     shutdownUI();
@@ -82,12 +83,14 @@ void Renderer::applyMaterial(Shader& shader,const Material& m) {
 void Renderer::draw(Shader& shader,Mesh& mesh,const Material& mat,const Mat4& model,Vec4 tint,int pattern,int variant,float emission,int id,float sway) {
     applyMaterial(shader,mat);shader.set("uInstanced",0);shader.set("uModel",model);shader.set("uTint",tint);
     shader.set("uFishPattern",pattern);shader.set("uFishVariant",variant);shader.set("uEmission",emission);shader.set("uPickId",id);shader.set("uSway",sway);
+    if (mesh.twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
     glBindVertexArray(mesh.vao); glDrawElements(GL_TRIANGLES, mesh.indexCount, GL_UNSIGNED_INT, nullptr);++stats_.draws;stats_.triangles+=mesh.triangles();
 }
 void Renderer::batch(Shader& shader,Mesh& mesh,const Material& mat,const std::vector<Instance>& data,float sway) {
     if(data.empty())return;
     mesh.setInstances(data);applyMaterial(shader,mat);shader.set("uInstanced",1);shader.set("uSway",sway);
     shader.set("uFishPattern",-1);shader.set("uFishVariant",0);shader.set("uEmission",0.0f);shader.set("uPickId",0);
+    if (mesh.twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
     glBindVertexArray(mesh.vao); glDrawElementsInstanced(GL_TRIANGLES, mesh.indexCount, GL_UNSIGNED_INT, nullptr, mesh.instanceCount);++stats_.draws;stats_.triangles+=mesh.triangles()*int(data.size());
 }
 void Renderer::drawNode(Shader& shader,const Node& node,const Mat4& parent,int species,int variant,float emission,int id) {
@@ -103,7 +106,7 @@ void Renderer::drawGeometry(const Scene& s,bool picking) {
     std::array<std::vector<Instance>,CoralVariants> corals;std::vector<Instance> rocks,kelp;
     for(const auto& item:s.chunks) {
         Vec3 offset=chunkOffset(item.first,s.origin);
-        if(!visible(offset,19.0f)){stats_.objectsCulled+=int(item.second.objects.size())+1;continue;}
+        if(!visible(offset,23.0f)){stats_.objectsCulled+=int(item.second.objects.size())+1;continue;}
         auto mesh=terrain_.find(item.first);if(mesh!=terrain_.end()){draw(shader,*mesh->second,sandMat_,translate(offset),{1,1,1,1});++stats_.chunksDrawn;}
         for(const auto& o:item.second.objects) {
             if(!visible(offset+o.boundCenter,o.radius)){++stats_.objectsCulled;continue;}
@@ -134,6 +137,7 @@ void Renderer::drawGeometry(const Scene& s,bool picking) {
             rotateX(radians(65)+f.finAngle)*scale(Vec3(.55f));
         drawNode(shader,root,Mat4(1.0f),f.species,f.variant,i==s.selectedFish?.22f:0,i+1);++stats_.fish;
     }
+    if (s.megalodon.active && visible(s.megalodon.position, 9.5f)) drawMegalodon(shader, s, picking);
 }
 void Renderer::render(const Scene& s,int width,int height) {
     if(width<=0||height<=0)return;
@@ -183,7 +187,7 @@ int Renderer::pick(const Scene& s,int x,int y) {
     const GLuint zero[4]={0,0,0,0};glClearBufferuiv(GL_COLOR,0,zero);glClear(GL_DEPTH_BUFFER_BIT);drawGeometry(s,true);
     GLuint id=0;glReadBuffer(GL_COLOR_ATTACHMENT0);glReadPixels(x,y,1,1,GL_RED_INTEGER,GL_UNSIGNED_INT,&id);
     glBindFramebuffer(GL_FRAMEBUFFER,0);glReadBuffer(GL_BACK);stats_=saved;
-    return id>0&&id<=s.fish.size()?int(id)-1:-1;
+    return id > 0 && id <= s.fish.size() + (s.megalodon.active ? 1u : 0u) ? int(id) - 1 : -1;
 }
 bool Renderer::screenshot(const std::filesystem::path& path) const {return saveScreenshot(path,width_,height_);}
 bool Renderer::valid() const {
@@ -196,4 +200,18 @@ bool Renderer::checkErrors() {
         ok = false;
     }
     return ok;
+}
+
+void Renderer::drawMegalodon(Shader& shader, const Scene& s, bool) {
+    const Megalodon& shark = s.megalodon;
+    const Mat4 model = translate(shark.position) * rotateY(shark.yaw) * rotateZ(shark.pitch) * scale(Vec3(1.65f));
+    const int id = int(s.fish.size()) + 1;
+    const Vec4 grey(.27f, .35f, .39f, 1);
+    draw(shader, sharkBody_, fishMat_, model, grey, -2, 0, 0, id);
+    draw(shader, sharkTail_, fishMat_, model * translate({-3.45f, 0, 0}) * rotateY(shark.tailAngle), grey, -1, 0, 0, id);
+    draw(shader, fin_, fishMat_, model * translate({-.4f, .50f, 0}) * scale({3.7f, 5.5f, 1}), grey, -1, 0, 0, id);
+    for (int side : {-1, 1}) {
+        draw(shader, fin_, fishMat_, model * translate({.4f, -.2f, float(side) * .48f}) * rotateX(float(side) * radians(100)) * scale({4.8f, 5.0f, 1}), grey, -1, 0, 0, id);
+        draw(shader, sphere_, plainMat_, model * translate({2.5f, .12f, float(side) * .34f}) * scale(Vec3(.09f)), {.006f, .01f, .012f, 1}, -1, 0, 0, id);
+    }
 }

@@ -12,7 +12,7 @@ class Renderer {
     };
     Shader shader_,background_,bubbleShader_,pickShader_;
     std::array<std::unique_ptr<Mesh>,CoralVariants> coral_;
-    Mesh rock_,kelp_,sphere_,tail_,fin_,ring_,streamer_;
+    Mesh rock_,kelp_,sphere_,tail_,fin_,ring_,streamer_,sharkBody_,sharkTail_;
     Material sandMat_,coralMat_,rockMat_,fishMat_,leafMat_,plainMat_;
     Texture caustics_;
     std::array<Texture,SpeciesCount> photoTextures_;
@@ -33,6 +33,7 @@ class Renderer {
     void batch(Shader& shader,Mesh& mesh,const Material& material,const std::vector<Instance>& instances,float sway=0);
     void drawNode(Shader& shader,const Node& node,const Mat4& parent,int species,int variant,float emission,int id);
     void drawGeometry(const Scene& scene,bool picking);
+    void drawMegalodon(Shader& shader, const Scene& scene, bool picking);
     bool ensurePickBuffer();
     void shutdownUI();
 public:

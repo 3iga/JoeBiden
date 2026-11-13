@@ -24,6 +24,7 @@ public:
     void set(const std::string& name,const Mat4& x) const;
 };
 struct Mesh {
+    bool twoSided=false;
     GLuint vao=0,vbo=0,ebo=0,instanceBuffer=0;
     GLsizei indexCount=0,instanceCount=0;
 public:

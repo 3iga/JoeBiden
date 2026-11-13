@@ -67,6 +67,7 @@ void main() {
     vec2 uv=vUV*uUVScale;
     vec3 albedo=vTint.rgb*(uTexturing?texture(uDiffuse,uv).rgb:vec3(1));
     if(uFishPattern>=0)albedo=fishPattern(albedo);
+    if(uFishPattern==-2) albedo=mix(albedo,vec3(.73,.77,.75),smoothstep(.48,.72,vUV.y));
     vec3 N=normalize(vNormal);if(!gl_FrontFacing)N=-N;
     if(uNormalMapping&&uTexturing)N=mappedNormal(N,uv);
     vec3 L=normalize(uLightDirection),V=normalize(uEye-vWorld);

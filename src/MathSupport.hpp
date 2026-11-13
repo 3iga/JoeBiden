@@ -38,3 +38,5 @@ inline Mat4 perspective(float fov, float aspect, float nearZ, float farZ) {
 inline Mat4 lookAt(Vec3 eye, Vec3 target, Vec3 up = Vec3(0, 1, 0)) {
     return glm::lookAt(eye, target, up);
 }
+
+inline Vec3 mix(Vec3 a, Vec3 b, float t) { return glm::mix(a, b, t); }

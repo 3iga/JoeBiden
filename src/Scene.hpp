@@ -23,7 +23,7 @@ struct Settings {
     bool paused=false,wireframe=false,tour=false,ui=true,vsync=true,bubbles=true;
     bool dayCycle=true;
     float hour=10.5f,daySeconds=240,fogStart=14,visibility=48;
-    float swimSpeed=4.0f,fishSpeed=1.0f;
+    float swimSpeed=4.0f,fishSpeed=1.0f, lightAzimuth=0;
     int quality=1,transformMode=1;
     std::uint32_t seed=1337;
 };
@@ -59,8 +59,22 @@ struct Lighting {
     Vec3 fogColor{.035f,.25f,.29f};
     float daylight=1;
 };
+enum class SurveyState { Ready, Active, Complete, TimeUp };
+struct Survey {
+    SurveyState state = SurveyState::Ready;
+    float remaining = 180.0f;
+};
+struct Megalodon {
+    bool active = false;
+    bool manuallySpawned = false;
+    Vec3 position{}, velocity{}, target{};
+    float age = 0, yaw = 0, pitch = 0, tailAngle = 0;
+};
 struct Scene {
     Settings settings;
+    Survey survey;
+    Megalodon megalodon;
+    bool showMegalodonInfo=false, showHelp=false;
     Camera camera;
     Transform featured;             // Coordinates relative to original chunk (0,0).
     ChunkKey origin{};              // Floating origin, in whole chunks (64-bit).
