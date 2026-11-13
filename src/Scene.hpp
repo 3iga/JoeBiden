@@ -1,57 +1,82 @@
 #pragma once
-#include "Graphics.hpp"
+#include "MeshData.hpp"
 #include "Procedural.hpp"
-namespace reef {
+#include "Species.hpp"
+#include "World.hpp"
+#include <array>
+#include <map>
+#include <vector>
+
+
 struct Camera {
     Vec3 position{9.6f,5.0f,13.5f};
-    float yaw=radians(-121.0f),pitch=radians(-13.0f),fov=radians(58);
-    Vec3 forward() const { return normalize(Vec3(std::cos(yaw)*std::cos(pitch),std::sin(pitch),std::sin(yaw)*std::cos(pitch))); }
-    Vec3 right() const { return normalize(cross(forward(),Vec3(0,1,0))); }
-    Vec3 up() const { return normalize(cross(right(),forward())); }
-    Mat4 view() const { return lookAt(position,position+forward()); }
-    void lookToward(Vec3 target) { Vec3 d=normalize(target-position);yaw=std::atan2(d.z,d.x);pitch=std::asin(clamp(d.y,-1,1)); }
-    void reset() { position={9.6f,5.0f,13.5f};lookToward({-1.8f,1.45f,-4.8f});fov=radians(58); }
+    float yaw=radians(-121),pitch=radians(-13),fov=radians(58);
+    Vec3 forward() const { return safeNormalize({std::cos(yaw)*std::cos(pitch),std::sin(pitch),std::sin(yaw)*std::cos(pitch)}); }
+    Vec3 right() const { return safeNormalize(cross(forward(),{0,1,0})); }
+    Vec3 up() const { return safeNormalize(cross(right(),forward())); }
+    Mat4 view() const { return glm::lookAt(position, position + forward(), Vec3(0, 1, 0)); }
+    void lookToward(Vec3 target) {auto d=safeNormalize(target-position);yaw=std::atan2(d.z,d.x);pitch=std::asin(clamp(d.y,-1,1));}
+    void reset() {position={9.6f,5,13.5f};lookToward({-1.8f,1.45f,-4.8f});fov=radians(58);}
 };
 struct Settings {
     bool lighting=true,caustics=true,textures=true,normalMaps=true,fog=true;
-    bool paused=false,wireframe=false,tour=false,ui=true,vsync=true;
-    bool bubbles=true;
+    bool paused=false,wireframe=false,tour=false,ui=true,vsync=true,bubbles=true;
+    bool dayCycle=true;
+    float hour=10.5f,daySeconds=240,fogStart=14,visibility=48;
+    float swimSpeed=4.0f,fishSpeed=1.0f;
     int quality=1,transformMode=1;
     std::uint32_t seed=1337;
 };
 struct Transform {
-    Vec3 position{-1.8f,.32f,-2.6f},rotation{0,0,0},size{1.15f,1.15f,1.15f};
-    Mat4 matrix() const { return compose(position,rotation,size); }
-    void reset() { position={-1.8f,seabedHeight(-1.8f,-2.6f)+.32f,-2.6f};rotation=Vec3(0);size=Vec3(1.15f); }
+    Vec3 position{-1.8f,.32f,-2.6f},rotation{},size{1.15f,1.15f,1.15f};
+    Mat4 matrix() const {return compose(position,rotation,size);}
 };
-struct Node {
-    Mat4 local=Mat4::identity();
-    Mesh* mesh=nullptr;
-    Material* material=nullptr;
+enum class ObjectKind { Coral,Rock,Kelp };
+struct Object {
+    ObjectKind kind=ObjectKind::Coral;
+    int variant=0;
+    Transform transform;
     Vec4 tint{1,1,1,1};
-    std::vector<Node> children;
+    Vec3 boundCenter{};
+    float radius=1;
 };
-class Scene {
-    Shader shader,background,bubbleShader;
-    Mesh sand,branch,tube,plate,rock,kelp,sphere,tail,fin,ring;
-    Material sandMaterial,coralMaterial,rockMaterial,fishMaterial,leafMaterial,plainMaterial;
-    Texture causticTexture;
-    Node fish;
-    GLuint emptyVAO=0,bubbleVAO=0,bubbleVBO=0;
-    std::vector<Vec4> bubbleOrigins;
-    int coralCount=0,fishCount=24;
-    void material(const Material& m);
-    void draw(Mesh& mesh,Material& material,const Mat4& model,Vec4 tint,float sway=0,float emission=0);
-    void drawInstances(Mesh& mesh,Material& material,float sway=0);
-    void drawNode(const Node& node,const Mat4& parent);
-public:
-    Transform featured;
-    int drawCalls=0,triangleCount=0;
-    explicit Scene(const std::filesystem::path& shaderPath);
-    ~Scene();
-    void regenerate(const Settings& settings);
-    void render(const Camera& camera,const Settings& settings,float time,int width,int height);
-    int corals() const { return coralCount+1; }
-    int fishes() const { return fishCount; }
+struct Chunk {
+    ChunkKey key{};
+    MeshData terrain;
+    std::vector<Object> objects;
+    int coralCount=0;
 };
-} // namespace reef
+struct Fish {
+    int species=0,variant=0;
+    std::uint32_t id=0;
+    Vec3 position{},velocity{},target{},home{};
+    float scale=1,lengthCm=10,massKg=.1f,timer=0;
+    float yaw=0,pitch=0,roll=0,tailAngle=0,finAngle=0,phase=0;
+    Vec4 tint{1,1,1,1};
+};
+struct Lighting {
+    Vec3 direction{.3f,.9f,.3f},ambient{.3f,.4f,.45f},color{1,.94f,.8f};
+    Vec3 fogColor{.035f,.25f,.29f};
+    float daylight=1;
+};
+struct Scene {
+    Settings settings;
+    Camera camera;
+    Transform featured;             // Coordinates relative to original chunk (0,0).
+    ChunkKey origin{};              // Floating origin, in whole chunks (64-bit).
+    std::map<ChunkKey,Chunk> chunks;
+    std::vector<Fish> fish;
+    std::vector<Vec4> bubbles;
+    std::array<bool,SpeciesCount> discovered{};
+    Lighting light;
+    double time=0,tourTime=0;
+    std::uint64_t generation=0;
+    int pendingChunks=0,selectedFish=-1;
+    bool showFishInfo=false;
+    int guideSpecies=-1;
+    double worldX() const {return double(origin.first)*ChunkSize+camera.position.x;}
+    double worldZ() const {return double(origin.second)*ChunkSize+camera.position.z;}
+    float floorAt(Vec3 local) const {return terrainHeight(double(origin.first)*ChunkSize+local.x,double(origin.second)*ChunkSize+local.z,settings.seed);}
+    int discoveries() const {int n=0;for(bool x:discovered) if(x)++n;return n;}
+};
+Chunk generateChunk(ChunkKey key,std::uint32_t seed,int quality);
