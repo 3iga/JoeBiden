@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{8A20C646-C4E9-43B8-86B9-F5DE76E73BA4}</ProjectGuid>
+    <Keyword>MakeFileProj</Keyword><RootNamespace>LuminousReef</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType><UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <NMakeBuildCommandLine>call &quot;$(ProjectDir)build.bat&quot;</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>call &quot;$(ProjectDir)build.bat&quot;</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>echo Clean manually by deleting bin and obj only.</NMakeCleanCommandLine>
+    <NMakeOutput>$(ProjectDir)bin\Debug\LuminousReef.exe</NMakeOutput>
+    <NMakeIncludeSearchPath>$(ProjectDir)include;$(ProjectDir)include\imgui;$(ProjectDir)include\glfw\include;$(ProjectDir)src;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakePreprocessorDefinitions>_DEBUG;NOMINMAX;WIN32_LEAN_AND_MEAN;GLFW_INCLUDE_NONE;_HAS_EXCEPTIONS=0;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <LocalDebuggerCommand>$(NMakeOutput)</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)bin\Debug</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="src\Geometry.cpp" />
+    <None Include="src\Geometry.hpp" />
+    <None Include="src\Graphics.cpp" />
+    <None Include="src\Graphics.hpp" />
+    <None Include="src\Interface.cpp" />
+    <None Include="src\Interface.hpp" />
+    <None Include="src\MathSupport.hpp" />
+    <None Include="src\MeshData.hpp" />
+    <None Include="src\Procedural.hpp" />
+    <None Include="src\ProjectInfo.hpp" />
+    <None Include="src\Renderer.cpp" />
+    <None Include="src\Renderer.hpp" />
+    <None Include="src\RendererUI.cpp" />
+    <None Include="src\Scene.cpp" />
+    <None Include="src\Scene.hpp" />
+    <None Include="src\Species.cpp" />
+    <None Include="src\Species.hpp" />
+    <None Include="src\Update.cpp" />
+    <None Include="src\Update.hpp" />
+    <None Include="src\World.hpp" />
+    <None Include="src\glad_impl.c" />
+    <None Include="src\main.cpp" />
+    <None Include="shaders\*" />
+    <None Include="build.bat" /><None Include="README.md" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>
