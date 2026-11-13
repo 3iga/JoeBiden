@@ -1,0 +1,34 @@
+[
+  {
+    "article": "Amphiprion ocellaris",
+    "filename": "clownfish.bmp"
+  },
+  {
+    "article": "Paracanthurus hepatus",
+    "filename": "blue_tang.bmp"
+  },
+  {
+    "article": "Chelmon rostratus",
+    "filename": "butterflyfish.bmp"
+  },
+  {
+    "article": "Bolbometopon muricatum",
+    "filename": "parrotfish.bmp"
+  },
+  {
+    "article": "Zebrasoma flavescens",
+    "filename": "yellow_tang.bmp"
+  },
+  {
+    "article": "Zanclus cornutus",
+    "filename": "moorish_idol.bmp"
+  },
+  {
+    "article": "Pomacanthus imperator",
+    "filename": "emperor_angelfish.bmp"
+  },
+  {
+    "article": "Chromis viridis",
+    "filename": "chromis.bmp"
+  }
+]
