@@ -1,0 +1,7 @@
+Photograph: File:Clown_fish_in_the_Andaman_Coral_Reef.jpg
+Author: Ritiks
+License: CC BY-SA 3.0
+License URL: https://creativecommons.org/licenses/by-sa/3.0
+Source: https://commons.wikimedia.org/wiki/File:Clown_fish_in_the_Andaman_Coral_Reef.jpg
+Changes: proportionally resized to at most 640 px; converted to 24-bit BMP.
+Retrieved UTC: 2026-11-13

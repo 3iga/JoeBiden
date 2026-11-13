@@ -6,7 +6,10 @@
 
 bool Renderer::initializeUI(GLFWwindow* window, float scale) {
     IMGUI_CHECKVERSION();
-    if (!ImGui::CreateContext()) { std::cerr << "ERROR: ImGui context creation failed\n"; return false; }
+    if (!ImGui::CreateContext()) {
+        std::cerr << "ERROR: ImGui context creation failed\n";
+        return false;
+    }
     ImGuiIO& io = ImGui::GetIO();
     // No keyboard-navigation mode: keyboard always controls the dive, as requested.
     io.IniFilename = nullptr;
@@ -59,6 +62,6 @@ void Renderer::endUI() {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 bool Renderer::wantsMouse() const {
-    // Kept deliberately: a click on a slider must not also scan a fish behind it.
-    return uiInitialized_ && ImGui::GetIO().WantCaptureMouse;
+// Kept deliberately: a click on a slider must not also scan a fish behind it.
+return uiInitialized_ && ImGui::GetIO().WantCaptureMouse;
 }

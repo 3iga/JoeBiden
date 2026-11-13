@@ -1,0 +1,107 @@
+﻿{
+    "thumburl":  "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/12/Blue-green_Chromis%2C_Kiribati_imported_from_iNaturalist_photo_345755248.jpg/960px-Blue-green_Chromis%2C_Kiribati_imported_from_iNaturalist_photo_345755248.jpg?utm_source=commons.wikimedia.org\u0026utm_campaign=imageinfo\u0026utm_content=thumbnail",
+    "thumbwidth":  640,
+    "thumbheight":  490,
+    "responsiveUrls":  {
+                           "2":  "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/12/Blue-green_Chromis%2C_Kiribati_imported_from_iNaturalist_photo_345755248.jpg/1280px-Blue-green_Chromis%2C_Kiribati_imported_from_iNaturalist_photo_345755248.jpg?utm_source=commons.wikimedia.org\u0026utm_campaign=imageinfo\u0026utm_content=thumbnail"
+                       },
+    "thumbattribs":  {
+                         "src":  "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/12/Blue-green_Chromis%2C_Kiribati_imported_from_iNaturalist_photo_345755248.jpg/960px-Blue-green_Chromis%2C_Kiribati_imported_from_iNaturalist_photo_345755248.jpg?utm_source=commons.wikimedia.org\u0026utm_campaign=imageinfo\u0026utm_content=thumbnail",
+                         "decoding":  "async",
+                         "loading":  "lazy",
+                         "width":  640,
+                         "height":  490,
+                         "srcset":  "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/12/Blue-green_Chromis%2C_Kiribati_imported_from_iNaturalist_photo_345755248.jpg/1280px-Blue-green_Chromis%2C_Kiribati_imported_from_iNaturalist_photo_345755248.jpg?utm_source=commons.wikimedia.org\u0026utm_campaign=imageinfo\u0026utm_content=thumbnail 2x"
+                     },
+    "url":  "https://upload.wikimedia.org/wikipedia/commons/1/12/Blue-green_Chromis%2C_Kiribati_imported_from_iNaturalist_photo_345755248.jpg?utm_source=commons.wikimedia.org\u0026utm_campaign=imageinfo\u0026utm_content=original",
+    "descriptionurl":  "https://commons.wikimedia.org/wiki/File:Blue-green_Chromis,_Kiribati_imported_from_iNaturalist_photo_345755248.jpg",
+    "descriptionshorturl":  "https://commons.wikimedia.org/w/index.php?curid=157773249",
+    "extmetadata":  {
+                        "DateTime":  {
+                                         "value":  "2025-01-10 23:17:08",
+                                         "source":  "mediawiki-metadata",
+                                         "hidden":  ""
+                                     },
+                        "ObjectName":  {
+                                           "value":  "Blue-green Chromis, Kiribati imported from iNaturalist photo 345755248",
+                                           "source":  "mediawiki-metadata"
+                                       },
+                        "CommonsMetadataExtension":  {
+                                                         "value":  1.2,
+                                                         "source":  "extension",
+                                                         "hidden":  ""
+                                                     },
+                        "Categories":  {
+                                           "value":  "Chromis viridis|Media from iNaturalist|INaturalist images reviewed by iNaturalistReviewBot|Files with coordinates missing SDC location of creation|Media from GBIF|Media uploaded with WikiLovesINat",
+                                           "source":  "commons-categories",
+                                           "hidden":  ""
+                                       },
+                        "Assessments":  {
+                                            "value":  "",
+                                            "source":  "commons-categories",
+                                            "hidden":  ""
+                                        },
+                        "GPSLatitude":  {
+                                            "value":  "3.215680",
+                                            "source":  "commons-desc-page"
+                                        },
+                        "GPSLongitude":  {
+                                             "value":  "172.943603",
+                                             "source":  "commons-desc-page"
+                                         },
+                        "GPSMapDatum":  {
+                                            "value":  "WGS-84",
+                                            "source":  "commons-desc-page",
+                                            "hidden":  ""
+                                        },
+                        "ImageDescription":  {
+                                                 "value":  "Photo of Blue-green Chromis uploaded from \u003ca rel=\"nofollow\" class=\"external text\" href=\"https://inaturalist.org\"\u003eiNaturalist\u003c/a\u003e.",
+                                                 "source":  "commons-desc-page"
+                                             },
+                        "DateTimeOriginal":  {
+                                                 "value":  "2023-11-31",
+                                                 "source":  "commons-desc-page"
+                                             },
+                        "Credit":  {
+                                       "value":  "\u003ca rel=\"nofollow\" class=\"external free\" href=\"https://www.inaturalist.org/photos/345755248\"\u003ehttps://www.inaturalist.org/photos/345755248\u003c/a\u003e",
+                                       "source":  "commons-desc-page"
+                                   },
+                        "Artist":  {
+                                       "value":  "(c) Debra Baker, some rights reserved (CC BY)",
+                                       "source":  "commons-desc-page"
+                                   },
+                        "LicenseShortName":  {
+                                                 "value":  "CC BY 4.0",
+                                                 "source":  "commons-desc-page",
+                                                 "hidden":  ""
+                                             },
+                        "UsageTerms":  {
+                                           "value":  "Creative Commons Attribution 4.0",
+                                           "source":  "commons-desc-page"
+                                       },
+                        "AttributionRequired":  {
+                                                    "value":  "true",
+                                                    "source":  "commons-desc-page",
+                                                    "hidden":  ""
+                                                },
+                        "LicenseUrl":  {
+                                           "value":  "https://creativecommons.org/licenses/by/4.0",
+                                           "source":  "commons-desc-page"
+                                       },
+                        "Copyrighted":  {
+                                            "value":  "True",
+                                            "source":  "commons-desc-page",
+                                            "hidden":  ""
+                                        },
+                        "Restrictions":  {
+                                             "value":  "",
+                                             "source":  "commons-desc-page",
+                                             "hidden":  ""
+                                         },
+                        "License":  {
+                                        "value":  "cc-by-4.0",
+                                        "source":  "commons-templates",
+                                        "hidden":  ""
+                                    }
+                    }
+}

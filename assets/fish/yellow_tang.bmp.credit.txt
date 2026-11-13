@@ -1,0 +1,7 @@
+Photograph: File:Zebrasoma_flavescens_Luc_Viatour.jpg
+Author: Luc Viatour
+License: CC BY-SA 3.0
+License URL: http://creativecommons.org/licenses/by-sa/3.0/
+Source: https://commons.wikimedia.org/wiki/File:Zebrasoma_flavescens_Luc_Viatour.jpg
+Changes: proportionally resized to at most 640 px; converted to 24-bit BMP.
+Retrieved UTC: 2026-11-13

@@ -1,0 +1,26 @@
+{
+  "no_fog": {
+    "mean_absolute_rgb_change": 6.9347,
+    "changed_pixels": 119433
+  },
+  "no_caustics": {
+    "mean_absolute_rgb_change": 2.7466,
+    "changed_pixels": 209069
+  },
+  "no_normals": {
+    "mean_absolute_rgb_change": 4.1202,
+    "changed_pixels": 288605
+  },
+  "no_textures": {
+    "mean_absolute_rgb_change": 22.2648,
+    "changed_pixels": 327457
+  },
+  "unlit": {
+    "mean_absolute_rgb_change": 14.8505,
+    "changed_pixels": 330905
+  },
+  "wireframe": {
+    "mean_absolute_rgb_change": 54.5999,
+    "changed_pixels": 323076
+  }
+}
