@@ -5,13 +5,14 @@
 
 void Update::resetCoral(Scene& s) {
     s.featured={};
-    s.featured.position.y=terrainHeight(-1.8, -2.6, s.settings.seed)+.25f;
+    s.featured.position.y=terrainHeight(-1.8, -2.6, s.settings.seed, s.settings.visualUpgrade)+.25f;
 }
 void Update::initialize(Scene& s) {
     s.camera.reset();
     resetCoral(s);
-    regenerate(s);
-    s.light=lighting(s.settings.hour);
+    if(s.settings.visualUpgrade) preview(s,0);
+    else regenerate(s);
+    s.light=lighting(s.settings.hour, s.settings.visualUpgrade);
 }
 void Update::regenerate(Scene& s) {
     s.chunks.clear();
@@ -24,6 +25,7 @@ void Update::regenerate(Scene& s) {
     s.showMegalodonInfo = false;
     lastSeed_=s.settings.seed;
     lastQuality_=s.settings.quality;
+    lastVisualUpgrade_=s.settings.visualUpgrade;
     random_=Random(s.settings.seed+71);
     const int counts[]={24, 40, 56};
     s.fish.resize(counts[std::max(0, std::min(s.settings.quality, 2))]);
@@ -85,14 +87,14 @@ void Update::stream(Scene& s, int budget) {
         return da==db?a<b:da<db;
     });
     int n=std::min(budget, int(missing.size()));
-    for (int i=0; i<n; ++i)s.chunks.emplace(missing[std::size_t(i)], generateChunk(missing[std::size_t(i)], s.settings.seed, s.settings.quality));
+    for (int i=0; i<n; ++i)s.chunks.emplace(missing[std::size_t(i)], generateChunk(missing[std::size_t(i)], s.settings.seed, s.settings.quality, s.settings.visualUpgrade));
     s.pendingChunks=int(missing.size())-n;
     if (s.showStructureInfo&&!s.selectedStructure()) {
         s.showStructureInfo=false;
         s.selectedStructureId=0;
     }
 }
-Lighting Update::lighting(float hour) {
+Lighting Update::lighting(float hour, bool enhanced) {
     const float angle = (hour - 6.0f) * 2.0f * Pi / 24.0f;
     const float elevation = std::sin(angle);
     const float day = smooth01(-.20f, .24f, elevation);
@@ -106,6 +108,12 @@ Lighting Update::lighting(float hour) {
     Vec3 daylight = mix(Vec3(1, .94f, .80f), Vec3(1, .46f, .22f), twilight * .65f);
     light.color = mix(Vec3(.10f, .16f, .32f), daylight, day);
     light.fogColor = mix(Vec3(.006f, .019f, .044f), Vec3(.035f, .25f, .285f), day);
+    if(enhanced) {
+        // Week 5: lower ambient fill makes surface orientation readable.
+        light.ambient=mix(Vec3(.012f,.024f,.045f),Vec3(.15f,.22f,.245f),day);
+        light.color=mix(Vec3(.13f,.21f,.34f),daylight*1.12f,day);
+        light.fogColor=mix(Vec3(.004f,.014f,.032f),Vec3(.025f,.20f,.275f),day);
+    }
     return light;
 }
 void Update::spawnFish(Scene& s, int index, bool nearStart) {
@@ -301,10 +309,14 @@ void Update::step(Scene& s, const InputFrame& in, float dt) {
     if (in.pressed(Action::ScaleMode))o.transformMode=2;
     if (in.pressed(Action::Home))returnHome(s, false);
     if (in.pressed(Action::Focus))returnHome(s, true);
-    if (lastSeed_!=o.seed||lastQuality_!=o.quality) {
+    if(in.pressed(Action::VisualCompare))o.visualUpgrade=!o.visualUpgrade;
+    if (lastSeed_!=o.seed||lastQuality_!=o.quality||lastVisualUpgrade_!=o.visualUpgrade) {
         resetCoral(s);
         regenerate(s);
     }
+    if(in.pressed(Action::PreviewVista))preview(s,0);
+    if(in.pressed(Action::PreviewArch))preview(s,1);
+    if(in.pressed(Action::PreviewKelp))preview(s,2);
     Vec3 axis=in.transformAxis;
     if (o.transformMode==0)s.featured.position+=axis*dt*1.6f;
     if (o.transformMode==1)s.featured.rotation+=axis*dt*.9f;
@@ -327,7 +339,7 @@ void Update::step(Scene& s, const InputFrame& in, float dt) {
         if (o.tour)s.tourTime+=dt;
     }
     o.hour=std::fmod(std::max(o.hour, 0.0f), 24.0f);
-    s.light=lighting(o.hour);
+    s.light=lighting(o.hour, o.visualUpgrade);
     s.light.direction = Vec3(rotateY(radians(o.lightAzimuth)) * Vec4(s.light.direction, 0));
     if (o.tour) {
         // Deliberately scripted camera tour; fish motion is independent steering.
@@ -338,6 +350,11 @@ void Update::step(Scene& s, const InputFrame& in, float dt) {
         float a=.55f+float(s.tourTime)*.08f;
         s.camera.position={std::sin(a)*16, 5.4f+.5f*std::sin(float(s.tourTime)*.12f), -5+std::cos(a)*20};
         s.camera.lookToward({-1.8f, 1.45f, -4.8f});
+        if(o.visualUpgrade) {
+            s.camera.position={std::sin(a)*11.0f, 4.5f+std::sin(a)*1.2f, 2.0f+std::cos(a)*19.0f};
+            s.camera.position.y=std::max(s.camera.position.y,s.floorAt(s.camera.position)+2.0f);
+            s.camera.lookToward({-2.0f,0.6f,-22.0f});
+        }
     }
     rebase(s);
     s.camera.position.y=std::max(s.camera.position.y, s.floorAt(s.camera.position)+.65f);
@@ -408,4 +425,22 @@ void Update::animateMegalodon(Scene& s, float dt) {
     shark.yaw = std::atan2(-shark.velocity.z, shark.velocity.x);
     shark.pitch = std::atan2(shark.velocity.y, std::sqrt(shark.velocity.x * shark.velocity.x + shark.velocity.z * shark.velocity.z));
     shark.tailAngle = std::sin(shark.age * 2.5f) * .25f;
+}
+
+void Update::preview(Scene& s, int view) {
+    s.origin={0,0};
+    s.settings.tour=false;
+    s.settings.dayCycle=false;
+    s.settings.hour=10.5f;
+    s.settings.visibility=64;
+    s.settings.fogStart=12;
+    s.camera.fov=radians(62);
+    Vec3 target;
+    if(view==1) { s.camera.position={1.8f,2.6f,-13.5f};target={-2.0f,2.1f,-26.0f}; }
+    else if(view==2) { s.camera.position={5.5f,3.3f,-5.5f};target={17.0f,5.0f,-20.0f}; }
+    else { s.camera.position={7.0f,4.8f,18.0f};target={-3.0f,.7f,-17.0f}; }
+    s.camera.position.y=std::max(s.camera.position.y,s.floorAt(s.camera.position)+1.5f);
+    s.camera.lookToward(target);
+    regenerate(s);
+    s.light=lighting(s.settings.hour,s.settings.visualUpgrade);
 }

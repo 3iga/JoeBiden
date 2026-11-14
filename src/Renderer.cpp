@@ -23,7 +23,7 @@ static MeshData streamerMesh() {
 Renderer::Renderer(const std::filesystem::path& p, const std::filesystem::path& assets)
 :shader_(p/"reef.vert", p/"reef.frag"), background_(p/"background.vert", p/"background.frag"),
     bubbleShader_(p/"bubbles.vert", p/"bubbles.frag"), pickShader_(p/"reef.vert", p/"pick.frag"),
-rock_(makeRock()), kelp_(makeKelp()), seagrass_(makeSeagrass()), sphere_(makeSphere(18, 12)), tail_(makeTail()), fin_(makeFin()), ring_(makeRing()), streamer_(streamerMesh()), sharkBody_(makeSharkBody()), sharkTail_(makeSharkTail()) {
+rock_(makeRock()), arch_(makeRockArch()), kelp_(makeKelp()), curvedKelp_(makeBezierKelp()), seagrass_(makeSeagrass()), sphere_(makeSphere(18, 12)), tail_(makeTail()), fin_(makeFin()), ring_(makeRing()), streamer_(streamerMesh()), sharkBody_(makeSharkBody()), sharkTail_(makeSharkTail()) {
     for (int i=0; i<CoralVariants; ++i)coral_[std::size_t(i)]=std::make_unique<Mesh>(makeCoralVariant(i));
     for (int i=0; i<StructureVariantCount; ++i)structures_[std::size_t(i)]=std::make_unique<Mesh>(makeStructure(i));
     for (int i=0; i<int(debris_.size()); ++i)debris_[std::size_t(i)]=std::make_unique<Mesh>(makeDebris(i));
@@ -135,6 +135,7 @@ void Renderer::prepareShader(Shader& shader, const Scene& s, bool picking) {
     shader.set("uTime", float(std::fmod(s.time, 48000.0)));
     shader.set("uVisibility", s.settings.visibility);
     if (picking)return;
+    shader.set("uEnhanced", int(s.settings.visualUpgrade));
     shader.set("uLightDirection", s.light.direction);
     shader.set("uAmbient", s.light.ambient);
     shader.set("uLightColor", s.light.color);
@@ -151,6 +152,8 @@ void Renderer::prepareShader(Shader& shader, const Scene& s, bool picking) {
     shader.set("uNormalMap", 1);
     shader.set("uCaustics", 2);
     caustics_.bind(2);
+    shader.set("uRockDiffuse", 3);
+    rockMat_.diffuse.bind(3);
 }
 void Renderer::applyMaterial(Shader& shader, const Material& m) {
     m.diffuse.bind(0);
@@ -158,6 +161,7 @@ void Renderer::applyMaterial(Shader& shader, const Material& m) {
     shader.set("uUVScale", m.uvScale);
     shader.set("uShininess", m.shininess);
     shader.set("uSpecular", m.specular);
+    shader.set("uMaterialKind", m.kind);
 }
 void Renderer::draw(Shader& shader, Mesh& mesh, const Material& mat, const Mat4& model, Vec4 tint, int pattern, int variant, float emission, int id, float sway) {
     applyMaterial(shader, mat);
@@ -211,12 +215,12 @@ void Renderer::drawGeometry(const Scene& s, bool picking) {
     std::vector<Instance> rocks, kelp, seagrass;
     for (const auto& item:s.chunks) {
         Vec3 offset=chunkOffset(item.first, s.origin);
-        if (!visible(offset, 210.0f)) {
+        if (!visible(offset+item.second.boundsCenter, item.second.boundsRadius)) {
             stats_.objectsCulled+=int(item.second.objects.size())+1;
             continue;
         }
         auto mesh=terrain_.find(item.first);
-        if (mesh!=terrain_.end()) {
+        if (mesh!=terrain_.end() && visible(offset+item.second.terrainCenter, item.second.terrainRadius)) {
             draw(shader, *mesh->second, sandMat_, translate(offset), {1, 1, 1, 1});
             ++stats_.chunksDrawn;
         }
@@ -233,6 +237,7 @@ void Renderer::drawGeometry(const Scene& s, bool picking) {
             else if (o.kind==ObjectKind::Rock||o.kind==ObjectKind::Rockslide)rocks.push_back(inst);
             else if (o.kind==ObjectKind::Kelp)kelp.push_back(inst);
             else if (o.kind==ObjectKind::Seagrass)seagrass.push_back(inst);
+            else if (o.kind==ObjectKind::Arch)draw(shader, arch_, rockMat_, inst.model, inst.tint);
             else if (o.kind==ObjectKind::Debris)debris[std::size_t(std::max(0, std::min(o.variant, 4)))].push_back(inst);
             else {
                 const int type=std::max(0, std::min(o.variant, StructureVariantCount-1));
@@ -244,12 +249,12 @@ void Renderer::drawGeometry(const Scene& s, bool picking) {
     batch(shader, rock_, rockMat_, rocks);
     for (int i=0; i<int(debris_.size()); ++i)batch(shader, *debris_[std::size_t(i)], rockMat_, debris[std::size_t(i)]);
     for (int i=0; i<CoralVariants; ++i)batch(shader, *coral_[std::size_t(i)], coralMat_, corals[std::size_t(i)]);
-    batch(shader, kelp_, leafMat_, kelp, 1);
+    batch(shader, s.settings.visualUpgrade?curvedKelp_:kelp_, leafMat_, kelp, 1);
     batch(shader, seagrass_, leafMat_, seagrass, 1);
     Vec3 originOffset=chunkOffset({0, 0}, s.origin), featured=originOffset+s.featured.position;
     if (visible(featured+Vec3(0, 1.4f*s.featured.size.y, 0), 2.8f*std::max({s.featured.size.x, s.featured.size.y, s.featured.size.z}))) {
         Vec3 base=featured;
-        base.y=terrainHeight(s.featured.position.x, s.featured.position.z, s.settings.seed)+.03f;
+        base.y=terrainHeight(s.featured.position.x, s.featured.position.z, s.settings.seed, s.settings.visualUpgrade)+.03f;
         draw(shader, rock_, rockMat_, translate(base)*scale({1.05f, .25f, 1.05f}), {.86f, .93f, .84f, 1});
         draw(shader, *coral_[0], coralMat_, translate(originOffset)*s.featured.matrix(), {1, .37f, .44f, 1});
         ++stats_.corals;
@@ -299,6 +304,8 @@ void Renderer::render(const Scene& s, int width, int height) {
     background_.set("uFogColor", s.light.fogColor);
     background_.set("uLightColor", s.light.color);
     background_.set("uDaylight", s.light.daylight);
+    background_.set("uEnhanced", int(s.settings.visualUpgrade));
+    background_.set("uTime", float(std::fmod(s.time, 48000.0)));
     glBindVertexArray(emptyVao_);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     ++stats_.draws;

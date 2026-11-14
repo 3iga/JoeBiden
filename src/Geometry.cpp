@@ -363,18 +363,18 @@ void recalculateNormals(MeshData& m) {
     }
     for (auto& v:m.vertices)v.normal=safeNormalize(v.normal);
 }
-MeshData makeTerrainTile(ChunkKey key, std::uint32_t seed) {
+MeshData makeTerrainTile(ChunkKey key, std::uint32_t seed, bool enhanced) {
     MeshData m;
-    constexpr int N=20;
+    const int N=enhanced ? 32 : 20;
     const float half=float(ChunkSize*.5);
     for (int z=0; z<=N; ++z)for (int x=0; x<=N; ++x) {
         float lx=-half+float(ChunkSize)*float(x)/N, lz=-half+float(ChunkSize)*float(z)/N;
         double wx=double(key.first)*ChunkSize+lx, wz=double(key.second)*ChunkSize+lz;
         const double e=.03;
-        float dx=(terrainHeight(wx+e, wz, seed)-terrainHeight(wx-e, wz, seed))/float(2*e);
-        float dz=(terrainHeight(wx, wz+e, seed)-terrainHeight(wx, wz-e, seed))/float(2*e);
+        float dx=(terrainHeight(wx+e, wz, seed, enhanced)-terrainHeight(wx-e, wz, seed, enhanced))/float(2*e);
+        float dz=(terrainHeight(wx, wz+e, seed, enhanced)-terrainHeight(wx, wz-e, seed, enhanced))/float(2*e);
         // Texture period is 3 world units. Integer chunk offsets give seamless wrapping.
-        m.vertices.push_back({{lx, terrainHeight(wx, wz, seed), lz}, safeNormalize({-dx, 1, -dz}), {lx/3, lz/3}});
+        m.vertices.push_back({{lx, terrainHeight(wx, wz, seed, enhanced), lz}, safeNormalize({-dx, 1, -dz}), {lx/3, lz/3}});
     }
     for (int z=0; z<N; ++z)for (int x=0; x<N; ++x) {
         unsigned a=unsigned(z*(N+1)+x), b=a+N+1;
@@ -517,5 +517,82 @@ MeshData makeSharkTail() {
     {{-1.25f, -1.25f, 0}, {0, 0, 1}, {0, 0}}
     };
     mesh.indices = {0, 1, 2, 0, 2, 3};
+    return mesh;
+}
+
+// Week 6: a cubic Bezier curve. Sampling builds a mesh on the CPU, not a new pipeline.
+static Vec3 bezierPoint(Vec3 a, Vec3 b, Vec3 c, Vec3 d, float t) {
+    const float u=1.0f-t;
+    return a*(u*u*u)+b*(3.0f*u*u*t)+c*(3.0f*u*t*t)+d*(t*t*t);
+}
+MeshData makeBezierKelp() {
+    MeshData mesh;
+    mesh.twoSided=true;
+    Random rng(0x4b454c50u);
+    for (int leaf=0; leaf<9; ++leaf) {
+        const float angle=rng.range(0, 2*Pi), height=rng.range(2.3f, 4.4f);
+        const Vec3 side(std::cos(angle), 0, std::sin(angle));
+        const Vec3 a=side*rng.range(.05f, .25f), b=a+Vec3(0, height*.33f, 0);
+        const Vec3 c=a+Vec3(0, height*.73f, 0)+side*rng.range(.2f, .7f);
+        const Vec3 d=a+Vec3(0, height, 0)+side*rng.range(.6f, 1.1f);
+        const unsigned first=unsigned(mesh.vertices.size());
+        const float width=rng.range(.13f, .26f);
+        for (int i=0; i<=18; ++i) {
+            const float t=float(i)/18.0f;
+            Vec3 center=bezierPoint(a,b,c,d,t);
+            center+=side*(std::sin(t*19.0f+angle)*.06f*std::sin(Pi*t));
+            const Vec3 tangent=(b-a)*(3.0f*(1-t)*(1-t))+(c-b)*(6.0f*(1-t)*t)+(d-c)*(3.0f*t*t);
+            const Vec3 n=safeNormalize(cross(side,tangent));
+            const float w=.008f+width*std::pow(std::max(0.0f,std::sin(Pi*t)),.8f);
+            mesh.vertices.push_back({center-side*w,n,{0,t}});
+            mesh.vertices.push_back({center+side*w,n,{1,t}});
+            if(i<18) {
+                const unsigned j=first+unsigned(i*2);
+                triangle(mesh,j,j+1,j+2);triangle(mesh,j+1,j+3,j+2);
+            }
+        }
+    }
+    return mesh;
+}
+MeshData makeRockArch() {
+    MeshData mesh;
+    // An eroded tubular sweep along a Bezier arch, with sealed ends.
+    constexpr int rings=40, sides=14;
+    const Vec3 a(-5.2f,-1.8f,0),b(-6.6f,8.0f,0),c(6.6f,8.0f,0),d(5.2f,-1.8f,0);
+    for(int r=0;r<=rings;++r) {
+        const float t=float(r)/rings;
+        const Vec3 center=bezierPoint(a,b,c,d,t);
+        const Vec3 tangent=safeNormalize((b-a)*(3.0f*(1-t)*(1-t))+(c-b)*(6.0f*(1-t)*t)+(d-c)*(3.0f*t*t));
+        const Vec3 right=safeNormalize(cross(tangent,Vec3(0,0,1))),front=cross(tangent,right);
+        for(int i=0;i<=sides;++i) {
+            const float u=float(i)/sides,theta=2*Pi*u;
+            const Vec3 normal=right*std::cos(theta)+front*std::sin(theta);
+            const float radius=(.86f+.48f*std::pow(std::abs(2*t-1),2.0f))*(1+.12f*std::sin(t*43+theta*3)+.06f*std::sin(theta*7-t*18));
+            mesh.vertices.push_back({center+normal*radius,normal,{u*2,t*5}});
+        }
+    }
+    for(int r=0;r<rings;++r)for(int i=0;i<sides;++i) {
+        unsigned a0=unsigned(r*(sides+1)+i),b0=a0+sides+1;
+        triangle(mesh,a0,a0+1,b0);triangle(mesh,a0+1,b0+1,b0);
+    }
+    for(int end=0;end<2;++end) {
+        const Vec3 center=end?d:a;
+        const Vec3 normal=end?safeNormalize(d-c):safeNormalize(a-b);
+        const unsigned first=unsigned(mesh.vertices.size());
+        const unsigned ring=unsigned(end?rings*(sides+1):0);
+        for(int i=0;i<=sides;++i)mesh.vertices.push_back({mesh.vertices[ring+unsigned(i)].position,normal,{float(i)/sides,0}});
+        const unsigned middle=unsigned(mesh.vertices.size());
+        mesh.vertices.push_back({center,normal,{.5f,.5f}});
+        for(int i=0;i<sides;++i)triangle(mesh,middle,first+unsigned(i),first+unsigned(i+1));
+    }
+    // Match triangle winding to outward vertex normals; avoids camera-dependent holes.
+    for(std::size_t i=0;i<mesh.indices.size();i+=3) {
+        const auto& a0=mesh.vertices[mesh.indices[i]];
+        const auto& b0=mesh.vertices[mesh.indices[i+1]];
+        const auto& c0=mesh.vertices[mesh.indices[i+2]];
+        if(dot(cross(b0.position-a0.position,c0.position-a0.position),a0.normal+b0.normal+c0.normal)<0)
+            std::swap(mesh.indices[i+1],mesh.indices[i+2]);
+    }
+    recalculateNormals(mesh);
     return mesh;
 }

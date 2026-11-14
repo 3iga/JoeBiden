@@ -122,7 +122,8 @@ InputFrame Ui::build(Scene& s, const RenderStats& stats, const std::array<PhotoV
         ImGui::Text("%d draws / %dK triangles", stats.draws, stats.triangles/1000);
         ImGui::TextDisabled("World X %.1f / Z %.1f", s.worldX(), s.worldZ());
         ImGui::Text("Survey: %d / %d | %.0f s", s.discoveries(), SpeciesCount, s.survey.remaining);
-        ImGui::TextDisabled("F1 help | F5 reset survey | F9 record FPS");
+        ImGui::TextDisabled("F3 compare | F4 vista | F6 arch | F7 kelp");
+        ImGui::TextColored({.68f,.88f,1,1}, "%s", settings.visualUpgrade?"VISUAL UPGRADE":"ORIGINAL SPARSE LAYOUT");
         ImGui::TextColored({.97f, .82f, .45f, 1}, "%s", captured?"DIVE MODE - TAB releases the cursor":"CLICK A FISH OR WRECK");
     }
     ImGui::End();
@@ -131,6 +132,14 @@ InputFrame Ui::build(Scene& s, const RenderStats& stats, const std::array<PhotoV
     if (ImGui::Begin("Reef controls")) {
         if (ImGui::BeginTabBar("Controls")) {
             if (ImGui::BeginTabItem("Dive")) {
+                ImGui::SeparatorText("Visual preview - course techniques");
+                if(ImGui::Button(settings.visualUpgrade?"Original view [F3]":"Enhanced view [F3]"))request.press(Action::VisualCompare);
+                if(ImGui::Button("Valley [F4]"))request.press(Action::PreviewVista);
+                ImGui::SameLine();
+                if(ImGui::Button("Arch [F6]"))request.press(Action::PreviewArch);
+                ImGui::SameLine();
+                if(ImGui::Button("Kelp [F7]"))request.press(Action::PreviewKelp);
+                ImGui::TextWrapped("H hides panels. G runs the camera tour. F3 rebuilds the nearby world; it does not erase your project files.");
                 ImGui::SeparatorText("Reef survey");
                 ImGui::TextWrapped("Goal: scan all eight living reef species in three minutes. Press Tab to release the mouse, then click visible fish. The world stays explorable after the timer ends.");
                 if (s.survey.state == SurveyState::Ready) {
@@ -186,7 +195,7 @@ InputFrame Ui::build(Scene& s, const RenderStats& stats, const std::array<PhotoV
                 ImGui::Text("Pending generation: %d", s.pendingChunks);
                 ImGui::Text("Visible tiles: %d / GPU tiles: %d", stats.chunksDrawn, stats.gpuChunks);
                 ImGui::Text("Objects culled: %d", stats.objectsCulled);
-                ImGui::TextWrapped("The ocean floor shifts between quiet sediment plains, high seamounts, deep trenches and large crater basins. Coral patches, kelp and seagrass occupy separate habitats; debris gathers in small fields and wreck sites are widely spaced. The same seed recreates each site when revisited.");
+                ImGui::TextWrapped("The visual upgrade adds a continuous opening valley, Bezier rock arch, clustered coral palettes and curved kelp. All wreck types and the streamed ocean are retained. The ocean floor shifts between quiet sediment plains, high seamounts, deep trenches and large crater basins. Coral patches, kelp and seagrass occupy separate habitats; debris gathers in small fields and wreck sites are widely spaced. The same seed recreates each site when revisited.");
                 ImGui::SeparatorText("Movement");
                 ImGui::SliderFloat("Camera speed", &settings.swimSpeed, 1, 20, "%.1f");
                 ImGui::SliderFloat("Fish speed scale", &settings.fishSpeed, .05f, 3, "%.2fx");

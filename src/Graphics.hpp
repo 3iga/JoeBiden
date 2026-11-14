@@ -57,6 +57,7 @@ bool loadBMP(const std::filesystem::path& path, std::string& error);
 struct Material {
 Texture diffuse, normal;
 float shininess=32, specular=.25f, uvScale=1;
+int kind=5;
 };
 void makeMaterial(Material& material, int kind);
 void makeCaustics(Texture& texture);
