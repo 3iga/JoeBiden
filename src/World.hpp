@@ -101,7 +101,7 @@ inline float craterRelief(double x, double z, std::uint32_t seed) {
     }
     return rimHeight-depression;
 }
-inline float terrainHeight(double x, double z, std::uint32_t seed) {
+inline float originalTerrainHeight(double x, double z, std::uint32_t seed) {
     // Continuous global bathymetry: broad plains and ridges plus deep trenches and craters.
     const float startupFade=smooth01(24.0f, 48.0f, float(std::sqrt(x*x+z*z)));
     const float broad=(float(valueNoise(x*.004, z*.004, seed+17u))-.5f)*14.0f;
@@ -110,6 +110,38 @@ inline float terrainHeight(double x, double z, std::uint32_t seed) {
     (valueNoise(x*.085, z*.085, seed+37u)-.5)*.65 +
     .09*std::sin(x*.6+z*.18))+
     startupFade*(mountainRelief(x, z, seed)-canyonRelief(x, z, seed)+craterRelief(x, z, seed));
+}
+// Course topics: continuous procedural surfaces and seeded scalar noise.
+// A deliberately composed opening valley makes the geometry visible immediately.
+// Global coordinates, not per-tile random heights, keep all shared edges continuous.
+inline float terrainHeight(double x, double z, std::uint32_t seed, bool enhanced = true) {
+    const float original = originalTerrainHeight(x, z, seed);
+    if (!enhanced) return original;
+    const double distance = std::sqrt(x*x + z*z);
+    const float local = 1.0f - smooth01(65.0f, 110.0f, float(distance));
+    const double lane = -1.5 + 2.4 * std::sin((z + 5.0) * .065);
+    const double left = (x + 14.0) / 8.5, right = (x - 16.0) / 10.0;
+    const double along = (z + 19.0) / 28.0;
+    const float banks = float(10.5 * std::exp(-left*left - along*along) +
+                             13.0 * std::exp(-right*right - (z+28.0)*(z+28.0)/1100.0));
+    const float back = float(6.0 * std::exp(-x*x/550.0 - (z+48.0)*(z+48.0)/100.0));
+    const float channel = float(1.7 * std::exp(-(x-lane)*(x-lane)/26.0 - (z+16.0)*(z+16.0)/1400.0));
+    const float smallRidges = float((valueNoise(x*.055, z*.055, seed+921u)-.5)*2.2);
+    return original + local*(banks + back - channel) + smallRidges;
+}
+inline float reefGardenWeight(double x, double z, std::uint32_t seed) {
+    const float patch = float(valueNoise(x*.070, z*.070, seed+947u));
+    const float regional = .32f + .68f*smooth01(.24f, .70f,
+        float(valueNoise(x*.009, z*.009, seed+953u)));
+    const double lane = -1.5 + 2.4*std::sin((z+5.0)*.065);
+    const float opening = 1.0f-smooth01(42.0f, 80.0f, float(std::sqrt(x*x+z*z)));
+    const float clearLane = (1.0f-smooth01(1.6f, 4.5f, float(std::abs(x-lane))))*opening;
+    return (.24f + .76f*smooth01(.24f, .66f, patch))*regional*(1.0f-.94f*clearLane);
+}
+inline int reefPalette(double x, double z, std::uint32_t seed) {
+    // Regional palettes, rather than independently selecting every color of the rainbow.
+    const float n = float(valueNoise(x*.019, z*.019, seed+971u));
+    return n < .39f ? 0 : (n < .62f ? 1 : 2);
 }
 inline float reefIntensity(double x, double z, std::uint32_t seed) {
     const float patch=float(valueNoise(x*.003, z*.003, seed+701u));

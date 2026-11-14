@@ -10,6 +10,7 @@ uniform bool uInstanced;
 uniform float uTime, uSway;
 out vec3 vWorld, vNormal;
 out vec2 vUV;
+out float vLocalHeight;
 out vec4 vTint;
 void main() {
     mat4 model = uInstanced ? aInstanceModel : uModel;
@@ -25,6 +26,7 @@ void main() {
     vWorld=world.xyz;
     vNormal=normalize(transpose(inverse(mat3(model)))*localNormal);
     vUV=aUV;
+    vLocalHeight=aPosition.y;
     vTint=uInstanced ? aInstanceTint : uTint;
     gl_Position=uProjection*uView*world;
 }

@@ -53,7 +53,9 @@ static InputFrame readInput(GLFWwindow* window, Input& input, bool allowMouse) {
     {GLFW_KEY_BACKSPACE, Action::ResetCoral}, {GLFW_KEY_1, Action::MoveMode},
     {GLFW_KEY_2, Action::RotateMode}, {GLFW_KEY_3, Action::ScaleMode},
     {GLFW_KEY_ENTER, Action::StartSurvey}, {GLFW_KEY_F5, Action::RestartSurvey},
-    {GLFW_KEY_F1, Action::Help}
+    {GLFW_KEY_F1, Action::Help},
+    {GLFW_KEY_F3, Action::VisualCompare}, {GLFW_KEY_F4, Action::PreviewVista},
+    {GLFW_KEY_F6, Action::PreviewArch}, {GLFW_KEY_F7, Action::PreviewKelp}
     };
     for (const auto& key : keys) if (input.pressed[std::size_t(key.first)]) frame.press(key.second);
     auto down = [window](int key) {
@@ -165,7 +167,8 @@ static int run(GLFWwindow* window, const std::filesystem::path& folder) {
         InputFrame frame = readInput(window, input, input.captured || !renderer.wantsMouse());
         for (std::size_t i = 0; i < frame.action.size(); ++i) frame.action[i] = frame.action[i] || requests.action[i];
         update.step(scene, frame, dt);
-        if (frame.pressed(Action::Home) || frame.pressed(Action::Focus)) input.firstMouse = true;
+        if (frame.pressed(Action::Home) || frame.pressed(Action::Focus) || frame.pressed(Action::PreviewVista) ||
+            frame.pressed(Action::PreviewArch) || frame.pressed(Action::PreviewKelp)) input.firstMouse = true;
         if (previousVsync != scene.settings.vsync) {
             glfwSwapInterval(scene.settings.vsync ? 1 : 0);
             previousVsync = scene.settings.vsync;

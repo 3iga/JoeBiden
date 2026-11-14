@@ -161,6 +161,7 @@ static unsigned char byte(float v) {
     return static_cast<unsigned char>(clamp(v, 0, 1)*255+.5f);
 }
 void makeMaterial(Material& m, int kind) {
+    m.kind=kind;
     // kind: 0 sand, 1 coral, 2 rock, 3 fish, 4 leaf, 5 plain.
     constexpr int N=256;
     std::vector<float> heights(N*N);

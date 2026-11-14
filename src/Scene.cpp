@@ -47,14 +47,106 @@ static std::uint32_t structurePickId(ChunkKey cell, std::uint32_t seed) {
     return StructurePickBase|static_cast<std::uint32_t>(value&0x3fffffffu);
 }
 
-Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality) {
+static void finishBounds(Chunk& chunk) {
+    Vec3 lo(1e9f),hi(-1e9f);
+    for(const auto& v:chunk.terrain.vertices) { lo=glm::min(lo,v.position);hi=glm::max(hi,v.position); }
+    chunk.terrainCenter=(lo+hi)*.5f;
+    chunk.terrainRadius=length(hi-lo)*.5f+.1f;
+    for(const auto& o:chunk.objects) { lo=glm::min(lo,o.boundCenter-Vec3(o.radius));hi=glm::max(hi,o.boundCenter+Vec3(o.radius)); }
+    chunk.boundsCenter=(lo+hi)*.5f;
+    chunk.boundsRadius=length(hi-lo)*.5f+.1f;
+}
+static void addVisualGardens(Chunk& chunk, std::uint32_t seed, int quality) {
+    Random rng(chunkSeed(chunk.key,seed+1301u));
+    const double ox=double(chunk.key.first)*ChunkSize,oz=double(chunk.key.second)*ChunkSize;
+    const int attempts[]={45,80,115};
+    std::vector<Vec2> occupied;
+    const Vec4 palettes[3][4]={
+        {{.95f,.34f,.20f,1},{1.0f,.64f,.22f,1},{.82f,.24f,.35f,1},{.95f,.49f,.36f,1}},
+        {{.25f,.67f,.71f,1},{.45f,.37f,.83f,1},{.76f,.34f,.68f,1},{.36f,.81f,.62f,1}},
+        {{.79f,.45f,.24f,1},{.94f,.69f,.36f,1},{.49f,.65f,.47f,1},{.73f,.31f,.43f,1}}
+    };
+    for(int i=0;i<attempts[quality];++i) {
+        const float x=rng.range(-10.9f,10.9f),z=rng.range(-10.9f,10.9f);
+        const double wx=ox+x,wz=oz+z;
+        if(std::abs(wx+1.8)<2.5&&std::abs(wz+2.6)<2.5)continue;
+        const float weight=reefGardenWeight(wx,wz,seed);
+        if(rng.unit()>weight)continue;
+        bool clear=true;
+        for(const auto& q:occupied)if((q.x-x)*(q.x-x)+(q.y-z)*(q.y-z)<2.0f) { clear=false;break; }
+        if(!clear)continue;
+        occupied.push_back({x,z});
+        const int biome=reefPalette(wx,wz,seed);
+        const float floor=terrainHeight(wx,wz,seed,true);
+        Object coral;
+        coral.kind=ObjectKind::Coral;
+        // Large plates and tube clumps are inexpensive; sparse tall fans frame the view.
+        const float pick=rng.unit();
+        coral.variant=pick<.24f?rng.integer(0,2):(pick<.45f?rng.integer(3,5):(pick<.76f?rng.integer(6,7):rng.integer(8,9)));
+        const float size=rng.range(.58f,1.38f);
+        const float tall=coral.variant<6 ? rng.range(.90f,1.70f) : rng.range(.65f,1.05f);
+        coral.transform.position={x,floor-.035f,z};
+        coral.transform.rotation={rng.range(-.08f,.08f),rng.range(0,2*Pi),rng.range(-.06f,.06f)};
+        coral.transform.size={size*rng.range(.85f,1.25f),size*tall,size};
+        coral.tint=palettes[biome][rng.integer(0,3)];
+        coral.boundCenter=coral.transform.position+Vec3(0,1.4f*coral.transform.size.y,0);
+        coral.radius=3.2f*std::max({coral.transform.size.x,coral.transform.size.y,coral.transform.size.z});
+        chunk.objects.push_back(coral);++chunk.coralCount;
+        Object rock;rock.kind=ObjectKind::Rock;
+        rock.transform.position={x,floor-.10f,z};
+        rock.transform.rotation={0,coral.transform.rotation.y,0};
+        rock.transform.size={size*.75f,size*.22f,size*.66f};
+        rock.tint={.67f,.73f,.62f,1};rock.boundCenter=rock.transform.position;rock.radius=size*1.5f;
+        if(i%3==0)chunk.objects.push_back(rock);
+    }
+    // Cohesive vegetation beds with a clear sandy swimming lane.
+    const int plants[]={14,26,38};
+    for(int i=0;i<plants[quality];++i) {
+        const float x=rng.range(-11.0f,11.0f),z=rng.range(-11.0f,11.0f);
+        const double wx=ox+x,wz=oz+z;
+        if(reefGardenWeight(wx,wz,seed)<.20f)continue;
+        const bool tall=wx>9&&wx<30&&wz<8&&wz>-40 ? rng.unit()<.68f : rng.unit()<.16f;
+        const float size=rng.range(.62f,1.38f);
+        Object plant;plant.kind=tall?ObjectKind::Kelp:ObjectKind::Seagrass;
+        plant.transform.position={x,terrainHeight(wx,wz,seed,true)-.03f,z};
+        plant.transform.rotation={0,rng.range(0,2*Pi),0};
+        plant.transform.size={size,size*rng.range(.85f,1.35f),size};
+        plant.tint=tall?Vec4{.44f,.66f,.28f,1}:Vec4{.30f,.60f,.45f,1};
+        plant.boundCenter=plant.transform.position+Vec3(0,tall?2.4f*plant.transform.size.y:.45f*size,0);
+        plant.radius=tall?4.0f*std::max(size,plant.transform.size.y):1.8f*size;
+        chunk.objects.push_back(plant);
+    }
+    // Low-cost stacked boulders break up silhouettes along the valley's banks.
+    for(int i=0;i<5;++i) {
+        const float x=rng.range(-10,10),z=rng.range(-10,10);
+        const double wx=ox+x,wz=oz+z;
+        if(reefGardenWeight(wx,wz,seed)<.26f)continue;
+        const float scaleValue=rng.range(1.1f,2.6f);
+        Object rock;rock.kind=ObjectKind::Rock;
+        rock.transform.position={x,terrainHeight(wx,wz,seed,true)+scaleValue*.35f,z};
+        rock.transform.rotation={rng.range(-.18f,.18f),rng.range(0,2*Pi),rng.range(-.18f,.18f)};
+        rock.transform.size={scaleValue,scaleValue*rng.range(.7f,1.5f),scaleValue*.85f};
+        rock.tint={.64f,.69f,.58f,1};rock.boundCenter=rock.transform.position;
+        rock.radius=1.55f*std::max({rock.transform.size.x,rock.transform.size.y,rock.transform.size.z});
+        chunk.objects.push_back(rock);
+    }
+    if(chunk.key==ChunkKey{0,-1}) {
+        Object arch;arch.kind=ObjectKind::Arch;
+        arch.transform.position={-2.0f,terrainHeight(-2.0,-25.0,seed,true)+.65f,-1.0f};
+        arch.transform.rotation={0,.13f,0};arch.transform.size=Vec3(1.0f);
+        arch.tint={.61f,.66f,.57f,1};arch.boundCenter=arch.transform.position+Vec3(0,2.0f,0);arch.radius=9;
+        chunk.objects.push_back(arch);
+    }
+}
+Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality, bool enhanced) {
     Chunk result;
     result.key=key;
-    result.terrain=makeTerrainTile(key, seed);
+    result.terrain=makeTerrainTile(key, seed, enhanced);
     Random rng(chunkSeed(key, seed));
     std::vector<Vec2> points;
     const int target[3]={2, 4, 6};
     quality=std::max(0, std::min(quality, 2));
+    if (!enhanced) {
     for (int attempt=0; attempt<600&&int(points.size())<target[quality]; ++attempt) {
         Vec2 p{rng.range(-10.25f, 10.25f), rng.range(-10.25f, 10.25f)};
         const double wx=double(key.first)*ChunkSize+p.x, wz=double(key.second)*ChunkSize+p.y;
@@ -73,7 +165,7 @@ Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality) {
     const Vec4 palette[]={{.95f, .29f, .34f, 1}, {.76f, .29f, .71f, 1}, {.57f, .43f, .95f, 1},
     {.26f, .82f, .69f, 1}, {1, .71f, .26f, 1}, {.97f, .46f, .28f, 1}};
     for (auto p:points) {
-        const float ground=terrainHeight(double(key.first)*ChunkSize+p.x, double(key.second)*ChunkSize+p.y, seed);
+        const float ground=terrainHeight(double(key.first)*ChunkSize+p.x, double(key.second)*ChunkSize+p.y, seed, enhanced);
         const float size=rng.range(.65f, 1.25f);
         Object coral;
         coral.kind=ObjectKind::Coral;
@@ -104,7 +196,7 @@ Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality) {
         const float size=rng.range(.65f, 1.6f);
         Object rock;
         rock.kind=ObjectKind::Rock;
-        rock.transform.position={x, terrainHeight(wx, wz, seed)+size*.25f, z};
+        rock.transform.position={x, terrainHeight(wx, wz, seed, enhanced)+size*.25f, z};
         rock.transform.rotation={rng.range(-.12f, .12f), rng.range(0, 2*Pi), rng.range(-.12f, .12f)};
         rock.transform.size={size*rng.range(.8f, 1.4f), size*rng.range(.7f, 1.1f), size*rng.range(.8f, 1.5f)};
         rock.tint={.56f, .66f, .68f, 1};
@@ -123,13 +215,17 @@ Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality) {
         const float size=rng.range(.55f, 1.2f);
         Object plant;
         plant.kind=tallKelp?ObjectKind::Kelp:ObjectKind::Seagrass;
-        plant.transform.position={x, terrainHeight(wx, wz, seed), z};
+        plant.transform.position={x, terrainHeight(wx, wz, seed, enhanced), z};
         plant.transform.rotation={0, rng.range(0, 2*Pi), 0};
         plant.transform.size=Vec3(size);
         plant.tint=tallKelp?Vec4{.38f, .57f, .31f, 1}:Vec4{.35f, .66f, .39f, 1};
         plant.boundCenter=plant.transform.position+Vec3(0, tallKelp?1.7f*size:.38f*size, 0);
         plant.radius=tallKelp?2.5f*size:1.45f*size;
         result.objects.push_back(plant);
+    }
+
+    } else {
+        addVisualGardens(result, seed, quality);
     }
 
     // Human debris collects in separated patches; the individual pieces are small.
@@ -144,7 +240,7 @@ Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality) {
             Object debris;
             debris.kind=ObjectKind::Debris;
             debris.variant=rng.integer(0, 4);
-            debris.transform.position={x, terrainHeight(wx, wz, seed)+.06f, z};
+            debris.transform.position={x, terrainHeight(wx, wz, seed, enhanced)+.06f, z};
             debris.transform.rotation={rng.range(-.2f, .2f), rng.range(0, 2*Pi), rng.range(-.2f, .2f)};
             debris.transform.size=Vec3(size);
             debris.tint=debrisTints[debris.variant];
@@ -162,8 +258,8 @@ Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality) {
             Vec2 p{rng.range(-10.0f, 10.0f), rng.range(-10.0f, 10.0f)};
             const double wx=double(key.first)*ChunkSize+p.x, wz=double(key.second)*ChunkSize+p.y;
             constexpr double sample=.8;
-            const float dx=float((terrainHeight(wx+sample, wz, seed)-terrainHeight(wx-sample, wz, seed))/(2*sample));
-            const float dz=float((terrainHeight(wx, wz+sample, seed)-terrainHeight(wx, wz-sample, seed))/(2*sample));
+            const float dx=float((terrainHeight(wx+sample, wz, seed, enhanced)-terrainHeight(wx-sample, wz, seed, enhanced))/(2*sample));
+            const float dz=float((terrainHeight(wx, wz+sample, seed, enhanced)-terrainHeight(wx, wz-sample, seed, enhanced))/(2*sample));
             const float slope=std::sqrt(dx*dx+dz*dz);
             if (slope>bestSlope) {
                 bestSlope=slope;
@@ -184,7 +280,7 @@ Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality) {
                 const float size=rng.range(.65f, 1.35f);
                 Object boulder;
                 boulder.kind=ObjectKind::Rockslide;
-                boulder.transform.position={x, terrainHeight(wx, wz, seed)+size*.32f, z};
+                boulder.transform.position={x, terrainHeight(wx, wz, seed, enhanced)+size*.32f, z};
                 boulder.transform.rotation={rng.range(-.08f, .08f), rng.range(0, 2*Pi), rng.range(-.08f, .08f)};
                 boulder.transform.size={size*rng.range(.85f, 1.35f), size*rng.range(.62f, .94f), size*rng.range(.8f, 1.3f)};
                 boulder.tint=stoneTints[rng.integer(0, 2)];
@@ -217,7 +313,7 @@ Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality) {
         wreck.variant=variant;
         wreck.pickId=structurePickId({gx, gz}, seed);
         const float localX=float(wx-centerX), localZ=float(wz-centerZ);
-        wreck.transform.position={localX, terrainHeight(wx, wz, seed), localZ};
+        wreck.transform.position={localX, terrainHeight(wx, wz, seed, enhanced), localZ};
         wreck.transform.rotation={0, float(noiseValue(gx, gz, seed+829u)*2.0*Pi), 0};
         const float size=.86f+float(noiseValue(gx, gz, seed+839u))*.38f;
         wreck.transform.size={size, size, size};
@@ -226,5 +322,6 @@ Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality) {
         wreck.radius=(variant==int(StructureVariant::AircraftCarrier)||variant==int(StructureVariant::LexingtonCarrier)||variant==int(StructureVariant::OceanLiner)?15.0f:variant==int(StructureVariant::CargoShip)?12.0f:variant==int(StructureVariant::Aircraft)?8.0f:variant==int(StructureVariant::Submarine)?10.0f:6.0f)*size;
         result.objects.push_back(wreck);
     }
+    finishBounds(result);
     return result;
 }

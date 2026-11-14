@@ -17,7 +17,7 @@ Shader shader_, background_, bubbleShader_, pickShader_;
 std::array<std::unique_ptr<Mesh>, CoralVariants> coral_;
 std::array<std::unique_ptr<Mesh>, StructureVariantCount> structures_;
 std::array<std::unique_ptr<Mesh>, 5> debris_;
-Mesh rock_, kelp_, seagrass_, sphere_, tail_, fin_, ring_, streamer_, sharkBody_, sharkTail_;
+Mesh rock_, arch_, kelp_, curvedKelp_, seagrass_, sphere_, tail_, fin_, ring_, streamer_, sharkBody_, sharkTail_;
 Material sandMat_, coralMat_, rockMat_, fishMat_, leafMat_, plainMat_;
 Texture caustics_;
 std::array<Texture, SpeciesCount> photoTextures_;

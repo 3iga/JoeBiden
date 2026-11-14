@@ -33,7 +33,8 @@ struct Settings {
 bool lighting=true, caustics=true, textures=true, normalMaps=true, fog=true;
 bool paused=false, wireframe=false, tour=false, ui=true, vsync=true, bubbles=true;
 bool dayCycle=true;
-float hour=10.5f, daySeconds=240, fogStart=14, visibility=48;
+bool visualUpgrade=true; // F3: rebuild the same seeded world with/without the visual pass.
+float hour=10.5f, daySeconds=240, fogStart=14, visibility=64;
 float swimSpeed=4.0f, fishSpeed=1.0f, lightAzimuth=0;
 int quality=1, transformMode=1;
 std::uint32_t seed=1337;
@@ -43,7 +44,7 @@ Vec3 position{-1.8f, .32f, -2.6f}, rotation{}, size{1.15f, 1.15f, 1.15f};
 Mat4 matrix() const {return compose(position, rotation, size);
 }
 };
-enum class ObjectKind { Coral, Rock, Kelp, Rockslide, Structure, Seagrass, Debris };
+enum class ObjectKind { Coral, Rock, Kelp, Rockslide, Structure, Seagrass, Debris, Arch };
 enum class StructureVariant { Ruin, CargoShip, OceanLiner, AircraftCarrier, Aircraft, LexingtonCarrier, Submarine, FishingBoat };
 constexpr int StructureVariantCount=8;
 constexpr std::uint32_t StructurePickBase=0x40000000u;
@@ -73,6 +74,8 @@ ChunkKey key{};
 MeshData terrain;
 std::vector<Object> objects;
 int coralCount=0;
+Vec3 terrainCenter{}, boundsCenter{};
+float terrainRadius=210, boundsRadius=210;
 };
 struct Fish {
 int species=0, variant=0;
@@ -123,7 +126,7 @@ double worldX() const {return double(origin.first)*ChunkSize+camera.position.x;
 }
 double worldZ() const {return double(origin.second)*ChunkSize+camera.position.z;
 }
-float floorAt(Vec3 local) const {return terrainHeight(double(origin.first)*ChunkSize+local.x, double(origin.second)*ChunkSize+local.z, settings.seed);
+float floorAt(Vec3 local) const {return terrainHeight(double(origin.first)*ChunkSize+local.x, double(origin.second)*ChunkSize+local.z, settings.seed, settings.visualUpgrade);
 }
 int discoveries() const {int n=0;
 for (bool x:discovered) if (x)++n;
@@ -145,4 +148,4 @@ bool selectedStructureLocation(double& x, double& z) const {
     return false;
 }
 };
-Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality);
+Chunk generateChunk(ChunkKey key, std::uint32_t seed, int quality, bool enhanced = true);
